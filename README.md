@@ -1,4 +1,4 @@
-# File Organizer
+# FileManager 
 
 ![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue.svg)
