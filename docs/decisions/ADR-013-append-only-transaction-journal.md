@@ -30,3 +30,10 @@ SQLite gives atomicity (journal-before-action is crash-safe), WAL gives concurre
 ## Consequences
 - **Benefits**: Undo exists and survives crashes; "where did X go" queryable; audit trail for the interview demo; fixes H2/H3 in one decision.
 - **Limitations**: Disk growth over time (add pruning policy later); every mutation has a write cost (acceptable at desktop scale).
+
+## Update (2026-09-07): Validation against real undo systems
+Research verified the design and added three hardening rules:
+1. **Pre-undo state validation** — record per-file `mtime + size` at journal time; before replaying an inverse op, verify the target still matches. Undo-after-external-change is a documented data-loss path (Zed #48697, tine #305); silent overwrite is unacceptable.
+2. **Never hard-delete — delegate to OS trash** — use `send2trash` (or equivalent) for deletes so the journal's inverse is "restore from trash", not "recreate from nothing".
+3. **Track operation type + inode** — cross-device `EXDEV` moves fall back to copy+delete (non-atomic); hardlinks share inodes. Naive reverse replay breaks on both. Journal stores `op_type` (rename/copy+delete/trash) and records inode, so undo re-copies instead of renames when needed.
+   Production file managers (Dolphin KIO::FileUndoManager, Nautilus) keep undo **in-memory only** — our persisted journal is deliberately stronger, which is the right call for unattended batch operations (with checkpoint compaction to bound growth, per oplog-undo's `compact()` pattern).

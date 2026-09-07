@@ -116,6 +116,22 @@ Any one of these is normal. All three together is the "I've grown since then" st
 
 ---
 
+## Comparable Solutions (how the ecosystem solved these — checked Sep 2026)
+
+Every finding above was validated against how established open-source projects actually solve the same problem. None of FileManager's faults are original — the interesting part is that **the industry converged on the same fixes**.
+
+| Our finding | The ecosystem norm (evidence) |
+|---|---|
+| M4/M5: extension-only + SHA-256-everything | **Progressive hashing is universal**: size → first-chunk hash → full hash. `organize` hashes size → first 1KB chunk → full hash; `dupeguru` does size → partial digest → samples → full digest; `rdfind` does size → first bytes → last bytes → md5; `Czkawka` prehashes head 4KiB + tail 4KiB (Blake3 default). Content-over-extension is the stated philosophy: rdfind README *"compares files based on their content, NOT on their file names."* |
+| C4: docs describing features that don't exist | rmlint's own `docs/cautions.rst` — *"Measure twice, cut once"* — treats overclaiming as a design sin; its docs explicitly warn finders can produce false positives. |
+| H3: no undo, no preview | `organize` ships `organize sim` (dry-run) before `run`; `fclones` keeps `group` (find) and `remove` (act) as **separate commands** so you inspect before modifying; `rdfind` literally has an `UndoableUnlink` that renames to temp before deleting. Desktop FMs (Dolphin's KIO::FileUndoManager) implement reverse-job undo. |
+| M3: "Others" punishment ghetto | Czkawka's `bad_extensions` tool *lists* files whose content doesn't match their extension — it reports the mismatch; it does not delete the file for it. Nobody punishes unrecognized files; they surface them. |
+| M1: NLP theater | The AI-organizer landscape (llama-fs 5.8k★, Local-File-Organizer 3.4k★...) shows the same hazard: several "AI organizers" are rule/regex under the hood; the starkest example is a 0★ project marketing pickle-based "adaptive learning" — theater is endemic, not unique to FileManager. |
+
+**Net:** the old app wasn't uniquely bad — it was *behind* an ecosystem that had already solved each of these. The upgrade (roadmap Step 4/5) adopts the industry norms: progressive hashing, content-first classification, dry-run everywhere, undo journal, and surface-don't-punish semantics.
+
+---
+
 ## Appendix: Verification Evidence (AST static analysis)
 
 System had no `pytest` available → I could not run the (already-broken) suite, so I verified the two decisive claims with Python's `ast` module:

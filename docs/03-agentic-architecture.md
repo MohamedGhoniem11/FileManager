@@ -151,3 +151,42 @@ class JournalEntry(BaseModel):        # the undo story
 - `time.sleep(1)` (readiness retry — roadmap step 1.4)
 - "Others orphan deletion" path
 - Unconditional Windows imports ([ADR-014](decisions/ADR-014-cross-platform-platformdirs.md))
+
+---
+
+## 8. Landscape Check — what exists vs what we build (checked Sep 2026)
+
+The agentic file-organizer space was surveyed before locking this design. Two honest conclusions:
+
+### The space splits into two shallow patterns
+1. **"Smart Sorter"** (llama-fs 5.8k★, Local-File-Organizer 3.4k★, AI File Sorter 1.6k★): one LLM decides the category and moves the file. **Zero or near-zero safety** — no confidence gating, no undo, no human gate in the big ones.
+2. **"Review Tool"** (TheYellowDuck, sift-ai, both 0★): a simple confidence threshold routes to a human. Closest to our gate, but single-model, no deliberation, no learning loop.
+
+### The gaps nobody fills (our honest moat)
+| Gap in the landscape | Who has it | What we build instead |
+|---|---|---|
+| Multi-agent deliberation | **None** (everyone uses one model or a tiered pipeline) | Analyzer/Classifier/Dedup/Rules debate; Commander arbitrates |
+| Confidence-gated escalation | sift-ai only (0★, threshold only) | Per-agent disagreement → council vote → escalate only contested files |
+| Correction-driven learning | One unverified 0★ project (pickle-based) | Persistent correction ledger → policy/prior updates, tested |
+| Structured decision journal | Nobody (TheYellowDuck has move-only log) | Verdicts with agent reasoning, queryable, undoable |
+
+### Calibration is the non-negotiable (validated against production systems)
+Production confidence gates exist for exactly this shape of problem: **Microsoft SCL** (multi-tier spam thresholds: 5-6 vs 9), **Salesforce Data 360 auto tagging** ("approve tags at threshold, rest to manual review"), **AWS AgentCore** claims routing (auto-approve vs HUMAN_REVIEW, fail-safe default), **NVIDIA**'s 4-band router. The deliberate protocol follows the **uncertainty-sampling** pattern from active learning (Munro, *HITL Machine Learning*, ch. 3).
+
+The one lesson all of them converge on: **a raw confidence score is not a probability.** Modern classifiers are systematically overconfident (Guo et al., ICML 2017), so:
+- Measure **Expected Calibration Error (ECE)** on a held-out set; apply temperature scaling / isotonic regression
+- Re-derive thresholds from **calibrated** scores, not raw ones
+- Keep **deterministic overrides** (critical file classes never auto-move regardless of score — mirroring AWS's fail-safe routing)
+- Use **asymmetric thresholds**: conservative auto-move band, wide ask-human band (wrong move ≈ irreversible cost)
+
+This is now encoded in [ADR-015](decisions/ADR-015-per-category-confidence-thresholds.md).
+
+---
+
+## 9. Journal validated against real undo systems
+
+The append-only journal ([ADR-013](decisions/ADR-013-append-only-transaction-journal.md)) goes **beyond** production desktop file managers — which is correct for a batch organizer:
+- Dolphin (`KIO::FileUndoManager`) and Nautilus both keep undo **in-memory only**; a crash loses everything. Our journal survives restart.
+- `send2trash` establishes the "never hard-delete" primitive — our Journal should delegate deletes to OS trash.
+- Known pitfall (Zed, tine bugs): **undo after external modification loses data.** Journal must record per-file `mtime + size` at op time and **validate state before replaying undo**.
+- Cross-device (`EXDEV`) and hardlink identities also break naive replay — journal tracks operation type + inode, and marks non-atomic moves as `copy+delete` (undo = re-copy).
