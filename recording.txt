@@ -1,0 +1,29 @@
+FileManager upgrade — interview demo recordings
+================================================
+
+Four videos (~20 min total). Record in order; each is independently re-recordable.
+
+VIDEO 1 — "I Wrote This" (War Room skills) ............ ~4 min
+  Story: agents, scorer, AGREE/CHALLENGE, HITL, Git-Ops
+  Key timestamps: agents tree 0:30, scorer 1:00, challenge 1:40, remediation 2:20
+
+VIDEO 2 — "The Honest Audit" (evidence-first) .......... ~5 min
+  Story: pytest --collect-only fails, AST proof, logger NameError,
+         README fiction, spaCy theater, severity table
+  Key timestamps: collect failure 0:00, AST proof 0:40, logger 1:20,
+                  README vs code 2:00, severity table 3:20
+
+VIDEO 3 — "The Agentic Upgrade" (File Council demo) .... ~8 min  ← money shot
+  Story: deliberation, confidence 0.92 auto-move, undo, 0.58 human gate,
+         correction learning, green suite
+  Key timestamps: 0.92 auto-move + journal 1:00-2:20, undo 2:50,
+                  human gate 4:20, correction learning 5:00-5:30
+
+VIDEO 4 — "The Result & The Lessons" ................... ~3 min
+  Story: before/after table, git log journey, "safety first" lesson
+
+Path notes:
+- Sample files: scratch Downloads folder (receipt PDF, near-dup images, opaque file)
+- Fresh state per take: demo/reset_state.py (or wipe config + DB + journal)
+- Kill notifications; 1080p+; terminal font ~16pt+; consistent theme
+- Rehearse once unrecorded before the real takes

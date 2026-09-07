@@ -1,7 +1,17 @@
-# FileManager 
+# FileManager → Agentic FileManager
 
 ![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows-blue.svg)
+
+> **The upgrade story lives in [`docs/`](docs/README.md)** — honest audit with evidence, the old-vs-new transformation, the agentic architecture ("File Council"), and a screen-recording demo script.
+>
+> 1. [00 — Origin](docs/00-origin.md) · where this project came from
+> 2. [01 — Audit](docs/01-audit.md) · the truth about the old system (file:line evidence)
+> 3. [02 — Old vs New](docs/02-old-vs-new.md) · the transformation pitch
+> 4. [03 — Agentic Architecture](docs/03-agentic-architecture.md) · the File Council design
+> 5. [04 — Ease-of-Life Features](docs/04-ease-of-life.md) · what's added & why
+> 6. [05 — Roadmap](docs/05-roadmap.md) · phased, testable implementation plan
+> 7. [06 — Demo Script](docs/06-demo-script.md) · interview screen-recording guide
 
 ---
 
