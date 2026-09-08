@@ -42,6 +42,7 @@ DEFAULT_CONFIG = {
     },
     "watch_locations": [],
     "rules": [],
+    "lifecycle_policies": [],
     "collision_strategy": "rename",
     "cleanup": {
         "dry_run": True,
