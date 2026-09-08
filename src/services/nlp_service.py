@@ -1,51 +1,29 @@
 """
-NLP Service
------------
+NLP Service — deterministic rule engine (roadmap 4.3, ADR-011)
+-------------------------------------------------------------
 Parses natural language queries to extract user intent and entities.
-Supports searching, configuration changes, and maintenance commands.
+
+ADR-011 killed the spaCy theater: the old stack loaded a ~700MB model that
+never influenced a single decision (audit M1/M2). This service is now a pure,
+deterministic rule engine — same intents, zero heavyweight dependencies —
+and the systems it feeds (ConfigAgent, search) are fully unit-testable.
 """
-import spacy
 import re
 from typing import Dict, Any, List, Optional
 from src.services.logger import logger
 from datetime import datetime, timedelta
 
 class NlpService:
-    """Uses spaCy and pattern matching to interpret user requests."""
-    
-    def __init__(self):
-        self.nlp = None
-        self.is_fallback_mode = False
-        self._load_model()
+    """Deterministic rule-based interpretation of user requests (ADR-011)."""
 
-    def _load_model(self):
-        """Attempts to load spaCy model, auto-downloads if missing, falls back to rules if failed."""
-        model_name = "en_core_web_sm"
-        try:
-            # 1. Try loading existing
-            self.nlp = spacy.load(model_name)
-            logger.info(f"NLP Service: '{model_name}' loaded successfully.")
-        except (IOError, ImportError, OSError):
-            logger.warning(f"NLP Service: '{model_name}' missing. Attempting auto-download...")
-            try:
-                # 2. Try auto-download
-                from spacy.cli import download
-                download(model_name)
-                self.nlp = spacy.load(model_name)
-                logger.info(f"NLP Service: '{model_name}' downloaded and loaded successfully.")
-            except Exception as e:
-                # 3. Final fallback to rules
-                self.is_fallback_mode = True
-                logger.error(f"NLP Service: Failed to download/load model: {e}. Reverting to rule-based fallback.")
-        except Exception as e:
-            self.is_fallback_mode = True
-            logger.error(f"NLP Service: Unexpected error during init: {e}. Using rule-based fallback.")
+    #: Kept for API compatibility; rules are the primary and only mode.
+    is_fallback_mode = True
+    nlp = None
 
     def parse(self, text: str) -> Dict[str, Any]:
         """Translates user text into a structured command."""
         text = text.lower().strip()
-        
-        # 1. Intent Detection (Rule-based first for speed/certainty)
+
         # 1. Intent Detection - Specific commands first
         if any(w in text for w in ["scan", "index", "reindex"]):
             match = re.search(r'(?:scan|index|reindex)\s+(.+)', text)
@@ -54,7 +32,7 @@ class NlpService:
 
         elif any(w in text for w in ["stats", "info", "overview", "debug", "status"]):
             return {"intent": "debug_info", "entities": {}}
-            
+
         elif any(w in text for w in ["config", "make", "stop", "change", "set", "category", "folder", "enable", "disable"]):
             return self._handle_config(text)
 
@@ -64,17 +42,14 @@ class NlpService:
         # 2. General Search (Lowest priority)
         if any(w in text for w in ["find", "show", "search", "where is", "where are", "look for"]):
             return self._handle_search(text)
-            
-        # Fallback to general search if unsure
-        return self._handle_search(text)
-            
+
         # Fallback to general search if unsure
         return self._handle_search(text)
 
     def _handle_search(self, text: str) -> Dict[str, Any]:
         """Extracts search criteria."""
         entities = {}
-        
+
         # Extension extraction (e.g. "pdfs", "images", "text files")
         ext_map = {
             "pdf": ".pdf", "pdfs": ".pdf",
@@ -94,7 +69,7 @@ class NlpService:
         # Size extraction (e.g. "large", "> 5mb", "bigger than 10gb")
         if "large" in text or "big" in text:
             entities["min_size"] = 10 * 1024 * 1024 # 10MB
-        
+
         # Improved regex to handle "larger than", "bigger than", etc.
         size_match = re.search(r'(?:larger|bigger|more than|above|>)\s*(?:than\s*)?(\d+)\s*(mb|gb|kb)', text)
         if size_match:
@@ -132,26 +107,26 @@ class NlpService:
     def _handle_config(self, text: str) -> Dict[str, Any]:
         """Extracts configuration change requests."""
         entities = {}
-        
+
         # Category creation/modification
         if "category" in text or "folder" in text:
             # "make music go into Audio folder"
             # "create a category for screenshots"
             entities["action"] = "update_mapping"
-            
+
             # Simple keyword extraction for now
             if "screenshot" in text:
                 entities["target"] = "Screenshots"
                 entities["extensions"] = [".png", ".jpg"]
-            
+
         if "stop" in text:
             entities["action"] = "toggle_monitor"
             entities["value"] = False
-            
+
         if "enable cleanup" in text or "real cleanup" in text:
             entities["action"] = "set_cleanup_mode"
             entities["value"] = False # dry_run = False
-            
+
         if any(w in text for w in ["run", "every", "minutes"]):
             interval_match = re.search(r'(\d+)\s*minutes', text)
             if interval_match:
