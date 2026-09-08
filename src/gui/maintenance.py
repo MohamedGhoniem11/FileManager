@@ -10,6 +10,7 @@ from src.services.health_service import health_service
 from src.services.config_service import config_service
 from src.services.logger import logger
 from tkinter import messagebox
+from .theme import Theme
 
 class MaintenanceFrame(ctk.CTkFrame):
     """GUI component for orchestrating file system health and cleanup tasks."""
@@ -19,28 +20,82 @@ class MaintenanceFrame(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         
         # Title
-        ctk.CTkLabel(self, text="System Maintenance & Health", font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=20, pady=(20, 10), sticky="w")
+        ctk.CTkLabel(
+            self,
+            text="System Maintenance & Health",
+            text_color=Theme.TEXT_PRIMARY,
+            font=ctk.CTkFont(size=Theme.FONT_H2_SIZE, weight="bold"),
+        ).grid(row=0, column=0, padx=Theme.PAD_LG, pady=(24, Theme.PAD_LG), sticky="w")
         
         # Actions
-        self.action_frame = ctk.CTkFrame(self)
-        self.action_frame.grid(row=1, column=0, padx=20, pady=10, sticky="ew")
+        self.action_frame = ctk.CTkFrame(
+            self,
+            fg_color=Theme.BG_ELEVATED,
+            corner_radius=Theme.RADIUS_LG,
+            border_width=1,
+            border_color=Theme.BORDER,
+        )
+        self.action_frame.grid(row=1, column=0, padx=Theme.PAD_LG, pady=Theme.PAD_MD, sticky="ew")
         
-        self.audit_btn = ctk.CTkButton(self.action_frame, text="Run Health Audit", command=self.run_audit_threaded)
-        self.audit_btn.grid(row=0, column=0, padx=20, pady=20)
+        self.audit_btn = ctk.CTkButton(
+            self.action_frame,
+            text="Run Health Audit",
+            command=self.run_audit_threaded,
+            fg_color="transparent",
+            border_width=1,
+            border_color=Theme.BORDER_LIGHT,
+            hover_color=Theme.BG_RAISED,
+            text_color=Theme.TEXT_PRIMARY,
+            height=Theme.BTN_H,
+            corner_radius=Theme.RADIUS_MD,
+            font=ctk.CTkFont(size=Theme.FONT_BODY_SIZE),
+        )
+        self.audit_btn.grid(row=0, column=0, padx=Theme.PAD_LG, pady=Theme.PAD_LG)
         
-        self.cleanup_btn = ctk.CTkButton(self.action_frame, text="Execute Cleanup", command=self.confirm_cleanup, fg_color="#e67e22", hover_color="#d35400")
-        self.cleanup_btn.grid(row=0, column=1, padx=20, pady=20)
+        self.cleanup_btn = ctk.CTkButton(
+            self.action_frame,
+            text="Execute Cleanup",
+            command=self.confirm_cleanup,
+            fg_color="transparent",
+            border_width=1,
+            border_color=Theme.ERROR,
+            hover_color=Theme.ERROR_WASH,
+            text_color=Theme.ERROR,
+            height=Theme.BTN_H,
+            corner_radius=Theme.RADIUS_MD,
+            font=ctk.CTkFont(size=Theme.FONT_BODY_SIZE),
+        )
+        self.cleanup_btn.grid(row=0, column=1, padx=Theme.PAD_LG, pady=Theme.PAD_LG)
         self.cleanup_btn.configure(state="disabled")
 
         # Report Area
-        self.report_label = ctk.CTkLabel(self, text="No audit performed yet.", font=ctk.CTkFont(size=14))
-        self.report_label.grid(row=2, column=0, padx=20, pady=10, sticky="w")
+        self.report_label = ctk.CTkLabel(
+            self,
+            text="No audit performed yet.",
+            text_color=Theme.TEXT_SECONDARY,
+            font=ctk.CTkFont(size=Theme.FONT_BODY_SIZE),
+        )
+        self.report_label.grid(row=2, column=0, padx=Theme.PAD_LG, pady=Theme.PAD_MD, sticky="w")
         
-        self.report_box = ctk.CTkTextbox(self, height=200, state="disabled")
-        self.report_box.grid(row=3, column=0, padx=20, pady=10, sticky="nsew")
+        self.report_box = ctk.CTkTextbox(
+            self,
+            height=200,
+            state="disabled",
+            fg_color=Theme.BG_DEEP,
+            text_color=Theme.TEXT_SECONDARY,
+            border_width=1,
+            border_color=Theme.BORDER,
+            corner_radius=Theme.RADIUS_MD,
+            font=ctk.CTkFont(family=Theme.FONT_MONO, size=Theme.FONT_SMALL_SIZE),
+        )
+        self.report_box.grid(row=3, column=0, padx=Theme.PAD_LG, pady=Theme.PAD_MD, sticky="nsew")
         
-        self.progress_bar = ctk.CTkProgressBar(self)
-        self.progress_bar.grid(row=4, column=0, padx=20, pady=10, sticky="ew")
+        self.progress_bar = ctk.CTkProgressBar(
+            self,
+            progress_color=Theme.ACCENT,
+            fg_color=Theme.BG_RAISED,
+        )
+        self.progress_bar.grid(row=4, column=0, padx=Theme.PAD_LG, pady=Theme.PAD_MD, sticky="ew")
         self.progress_bar.set(0)
 
         self.last_report = None

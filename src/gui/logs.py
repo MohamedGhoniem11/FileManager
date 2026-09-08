@@ -5,6 +5,7 @@ Scrollable log display integrated with the system's queue handler.
 """
 import customtkinter as ctk
 from src.services.logger import logger, log_queue
+from .theme import Theme
 import queue
 
 class LogsFrame(ctk.CTkFrame):
@@ -15,10 +16,24 @@ class LogsFrame(ctk.CTkFrame):
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
-        ctk.CTkLabel(self, text="Application Logs", font=ctk.CTkFont(size=20, weight="bold")).grid(row=0, column=0, padx=20, pady=(20, 10), sticky="w")
+        ctk.CTkLabel(
+            self,
+            text="Application Logs",
+            text_color=Theme.TEXT_PRIMARY,
+            font=ctk.CTkFont(size=Theme.FONT_H2_SIZE, weight="bold"),
+        ).grid(row=0, column=0, padx=Theme.PAD_LG, pady=(24, Theme.PAD_LG), sticky="w")
         
-        self.textbox = ctk.CTkTextbox(self, state="disabled", font=ctk.CTkFont(family="Consolas", size=12))
-        self.textbox.grid(row=1, column=0, padx=20, pady=20, sticky="nsew")
+        self.textbox = ctk.CTkTextbox(
+            self,
+            state="disabled",
+            fg_color=Theme.BG_DEEP,
+            text_color=Theme.TEXT_SECONDARY,
+            border_width=1,
+            border_color=Theme.BORDER,
+            corner_radius=Theme.RADIUS_MD,
+            font=ctk.CTkFont(family=Theme.FONT_MONO, size=Theme.FONT_SMALL_SIZE),
+        )
+        self.textbox.grid(row=1, column=0, padx=Theme.PAD_LG, pady=(0, Theme.PAD_LG), sticky="nsew")
         
         self.after(100, self.update_logs)
 

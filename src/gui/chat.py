@@ -10,6 +10,7 @@ from src.services.nlp_service import get_nlp_service
 from src.services.db_service import db_service
 from src.core.config_agent import config_agent
 from src.services.logger import logger
+from .theme import Theme
 
 class ChatFrame(ctk.CTkFrame):
     """The Assistant's conversation interface."""
@@ -21,35 +22,97 @@ class ChatFrame(ctk.CTkFrame):
         self.grid_rowconfigure(1, weight=1)
         
         # Header
-        ctk.CTkLabel(self, text="AI Assistant", font=ctk.CTkFont(size=24, weight="bold")).grid(row=0, column=0, padx=20, pady=(20, 10), sticky="w")
+        ctk.CTkLabel(
+            self,
+            text="AI Assistant",
+            text_color=Theme.TEXT_PRIMARY,
+            font=ctk.CTkFont(size=Theme.FONT_H1_SIZE, weight="bold"),
+        ).grid(row=0, column=0, padx=Theme.PAD_LG, pady=(24, Theme.PAD_LG), sticky="w")
         
         # Chat History
-        self.history_box = ctk.CTkTextbox(self, state="disabled", wrap="word")
-        self.history_box.grid(row=1, column=0, padx=20, pady=10, sticky="nsew")
+        self.history_box = ctk.CTkTextbox(
+            self,
+            state="disabled",
+            wrap="word",
+            fg_color=Theme.BG_DEEP,
+            text_color=Theme.TEXT_SECONDARY,
+            border_width=1,
+            border_color=Theme.BORDER,
+            corner_radius=Theme.RADIUS_MD,
+        )
+        self.history_box.grid(row=1, column=0, padx=Theme.PAD_LG, pady=Theme.PAD_MD, sticky="nsew")
         
         # Input Area
         self.input_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.input_frame.grid(row=2, column=0, padx=20, pady=20, sticky="ew")
+        self.input_frame.grid(row=2, column=0, padx=Theme.PAD_LG, pady=Theme.PAD_LG, sticky="ew")
         self.input_frame.grid_columnconfigure(0, weight=1)
         
-        self.user_input = ctk.CTkEntry(self.input_frame, placeholder_text="Ask me: 'find my pdfs' or 'stop organizing zip files'...")
-        self.user_input.grid(row=0, column=0, padx=(0, 10), sticky="ew")
+        self.user_input = ctk.CTkEntry(
+            self.input_frame,
+            placeholder_text="Ask me: 'find my pdfs' or 'stop organizing zip files'...",
+            fg_color=Theme.BG_MAIN,
+            border_color=Theme.BORDER,
+            text_color=Theme.TEXT_PRIMARY,
+            placeholder_text_color=Theme.TEXT_MUTED,
+            height=Theme.INPUT_H,
+        )
+        self.user_input.grid(row=0, column=0, padx=(0, Theme.PAD_MD), sticky="ew")
         self.user_input.bind("<Return>", lambda e: self.send_message())
         
-        self.send_btn = ctk.CTkButton(self.input_frame, text="Send", width=80, command=self.send_message)
+        self.send_btn = ctk.CTkButton(
+            self.input_frame,
+            text="Send",
+            width=90,
+            command=self.send_message,
+            fg_color=Theme.ACCENT,
+            hover_color=Theme.ACCENT_HOVER,
+            height=Theme.INPUT_H,
+            corner_radius=Theme.RADIUS_MD,
+            font=ctk.CTkFont(size=Theme.FONT_BODY_SIZE),
+        )
         self.send_btn.grid(row=0, column=1)
         
         # Example Prompts Panel
         self._create_example_panel()
         
         # Confirmation Area (Hidden by default)
-        self.confirm_frame = ctk.CTkFrame(self)
-        self.confirm_label = ctk.CTkLabel(self.confirm_frame, text="Proposed Change:")
-        self.confirm_label.pack(side="left", padx=10, pady=5)
-        self.yes_btn = ctk.CTkButton(self.confirm_frame, text="Yes", width=60, fg_color="#2ecc71", command=self.apply_proposed_change)
-        self.yes_btn.pack(side="left", padx=5)
-        self.no_btn = ctk.CTkButton(self.confirm_frame, text="No", width=60, fg_color="#e74c3c", command=self.cancel_proposed_change)
-        self.no_btn.pack(side="left", padx=5)
+        self.confirm_frame = ctk.CTkFrame(
+            self,
+            fg_color=Theme.BG_ELEVATED,
+            corner_radius=Theme.RADIUS_MD,
+            border_width=1,
+            border_color=Theme.BORDER,
+        )
+        self.confirm_label = ctk.CTkLabel(
+            self.confirm_frame,
+            text="Proposed Change:",
+            text_color=Theme.TEXT_PRIMARY,
+            font=ctk.CTkFont(size=Theme.FONT_SMALL_SIZE),
+        )
+        self.confirm_label.pack(side="left", padx=Theme.PAD_LG, pady=Theme.PAD_SM)
+        self.yes_btn = ctk.CTkButton(
+            self.confirm_frame,
+            text="Yes",
+            width=60,
+            height=Theme.INPUT_H,
+            fg_color=Theme.ACCENT,
+            hover_color=Theme.ACCENT_HOVER,
+            command=self.apply_proposed_change,
+        )
+        self.yes_btn.pack(side="left", padx=Theme.PAD_SM)
+        self.no_btn = ctk.CTkButton(
+            self.confirm_frame,
+            text="No",
+            width=60,
+            height=Theme.INPUT_H,
+            fg_color="transparent",
+            border_width=1,
+            border_color=Theme.BORDER_LIGHT,
+            hover_color=Theme.BG_RAISED,
+            text_color=Theme.TEXT_PRIMARY,
+            command=self.cancel_proposed_change,
+        )
+        self.no_btn.pack(side="left", padx=Theme.PAD_SM)
         
         self.proposed_patch = None
         
@@ -59,9 +122,14 @@ class ChatFrame(ctk.CTkFrame):
     def _create_example_panel(self):
         """Creates a scrollable or grid panel of clickable examples."""
         self.example_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.example_frame.grid(row=4, column=0, padx=20, pady=(0, 20), sticky="ew")
+        self.example_frame.grid(row=4, column=0, padx=Theme.PAD_LG, pady=(0, Theme.PAD_LG), sticky="ew")
         
-        ctk.CTkLabel(self.example_frame, text="Try these:", font=ctk.CTkFont(size=12, weight="bold")).pack(side="left", padx=(0, 10))
+        ctk.CTkLabel(
+            self.example_frame,
+            text="Try these:",
+            text_color=Theme.TEXT_MUTED,
+            font=ctk.CTkFont(size=Theme.FONT_SMALL_SIZE, weight="bold"),
+        ).pack(side="left", padx=(0, Theme.PAD_MD))
         
         examples = [
             ("Find PDFs", "find my pdfs"),
@@ -76,12 +144,15 @@ class ChatFrame(ctk.CTkFrame):
                 self.example_frame, 
                 text=label, 
                 width=80, 
-                height=24, 
-                font=ctk.CTkFont(size=11),
-                fg_color="gray30",
+                height=28, 
+                font=ctk.CTkFont(size=Theme.FONT_SMALL_SIZE - 1),
+                fg_color=Theme.BG_RAISED,
+                hover_color=Theme.BORDER_LIGHT,
+                text_color=Theme.TEXT_SECONDARY,
+                corner_radius=Theme.RADIUS_PILL,
                 command=lambda c=cmd: self._fill_and_send(c)
             )
-            btn.pack(side="left", padx=5)
+            btn.pack(side="left", padx=Theme.PAD_SM)
 
     def _fill_and_send(self, cmd: str):
         self.user_input.delete(0, "end")
