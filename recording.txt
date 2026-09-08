@@ -54,7 +54,7 @@ git checkout rec/video-3-money
 
 - **Checkout:** anywhere on `main` at HEAD.
 - Commands on screen:
-  - `git log --oneline` → the journey: audit → fix CI → journal → agents → tests (46 commits)
+  - `git log --oneline` → the journey: audit → fix CI → journal → agents → tests
   - `.venv/bin/python -m pytest -q` → 228 green
 - Show before/after table (docs/01-audit.md) + Q&A cheat-sheet.
 
