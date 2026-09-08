@@ -74,6 +74,43 @@ def test_old_schema_version_is_migrated_and_values_preserved(mock_config):
     assert cfg["monitor_enabled"] is False
 
 
+def test_v1_config_migrated_to_v2_adds_new_defaults(mock_config):
+    """Step 6: v1 -> v2 adds confidence_thresholds, watch_locations, rules."""
+    with open(mock_config, "w") as f:
+        json.dump({
+            "schema_version": 1,
+            "monitor_enabled": False,
+            "watch_directory": "/tmp/custom",
+        }, f)
+
+    cfg = config_service._load_config()
+
+    assert cfg["schema_version"] == ConfigService.SCHEMA_VERSION
+    assert cfg["monitor_enabled"] is False
+    assert cfg["watch_directory"] == "/tmp/custom"
+    assert cfg["confidence_thresholds"] == {"auto": 0.80, "ask": 0.50, "categories": {}}
+    assert cfg["watch_locations"] == []
+    assert cfg["rules"] == []
+
+
+def test_v2_config_preserves_user_thresholds_and_rules(mock_config):
+    with open(mock_config, "w") as f:
+        json.dump({
+            "schema_version": 2,
+            "confidence_thresholds": {
+                "auto": 0.90, "ask": 0.60,
+                "categories": {"Work": {"auto": 0.95}},
+            },
+            "rules": [{"name": "x", "when": {}, "then": {}}],
+        }, f)
+
+    cfg = config_service._load_config()
+
+    assert cfg["confidence_thresholds"]["auto"] == 0.90
+    assert cfg["confidence_thresholds"]["categories"]["Work"]["auto"] == 0.95
+    assert cfg["rules"] == [{"name": "x", "when": {}, "then": {}}]
+
+
 def test_newer_schema_version_is_kept_not_downgraded(mock_config, caplog):
     with open(mock_config, "w") as f:
         json.dump({"schema_version": 999, "monitor_enabled": False}, f)

@@ -14,6 +14,8 @@ from watchdog.events import FileSystemEventHandler, FileCreatedEvent, FileMovedE
 from src.services.logger import logger
 from src.services.config_service import config_service
 from src.core.classifier import classifier
+from src.core.gate import decide as gate_decide
+from src.core.rules_agent import rules_agent
 from src.core.organizer import organizer
 from src.services.db_service import db_service
 
@@ -59,7 +61,13 @@ class DownloadHandler(FileSystemEventHandler):
         return False
 
     def _process_file(self, file_path: Path):
-        """Classifies and moves a single file once it is fully written."""
+        """Classifies, gates, and possibly moves a fully written file.
+
+        Flow per Step 6 (trust): classify with confidence -> evaluate rules
+        (dry-run) -> gate decides auto/ask/hold. Only "auto" moves; a
+        below-threshold or risky file is indexed in place and left for the
+        user to confirm (ask/hold), never auto-moved.
+        """
         if not self._is_ready(file_path):
             logger.warning(f"File never became ready; skipping: {file_path}")
             return
@@ -67,10 +75,40 @@ class DownloadHandler(FileSystemEventHandler):
         if not file_path.exists():
             return
 
-        category = classifier.classify(file_path)
+        classification = classifier.classify_with_confidence(file_path)
+        category = classification.category
+
+        matches = rules_agent.evaluate(file_path)
+        risk_flagged = any(m.risky for m in matches)
+        caps = [m.cap_confidence for m in matches if m.cap_confidence is not None]
+        effective = min([classification.confidence] + caps)
+
+        decision = gate_decide(
+            category, effective,
+            config_service.get("confidence_thresholds") or None,
+            risk_flagged=risk_flagged,
+        )
+
+        if decision.action != "auto":
+            logger.info(
+                f"Gate {decision.action} for {file_path.name}: {decision.reason}"
+            )
+            db_service.upsert_file(file_path)
+            return
+
+        # Rule redirect wins over the classifier's own category.
         target_dir = file_path.parent / category
-        
-        if file_path.parent.name == category:
+        for m in matches:
+            if m.move_to:
+                target_dir = Path(m.move_to).expanduser()
+                if not target_dir.is_absolute():
+                    target_dir = file_path.parent / m.move_to
+                break
+            if m.target_category:
+                target_dir = file_path.parent / m.target_category
+                break
+
+        if file_path.parent == target_dir:
             db_service.upsert_file(file_path)
             return
 

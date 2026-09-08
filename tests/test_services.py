@@ -3,6 +3,7 @@ import time
 from pathlib import Path
 from src.services.observer import observer_service, DownloadHandler
 from src.services.config_service import config_service
+from src.core.classifier import Classification
 
 def test_observer_start_stop(mocker):
     # Mock observer to not actually start threads
@@ -21,7 +22,10 @@ def test_observer_start_stop(mocker):
 def test_handler_process_file(tmp_path, mocker):
     # Mock organizer and classifier
     mock_move = mocker.patch("src.core.organizer.organizer.move_file")
-    mocker.patch("src.core.classifier.classifier.classify", return_value="Documents")
+    mocker.patch(
+        "src.core.classifier.classifier.classify_with_confidence",
+        return_value=Classification("Documents", 0.95, None, {}),
+    )
     
     handler = DownloadHandler()
     test_file = tmp_path / "test.txt"
@@ -34,6 +38,47 @@ def test_handler_process_file(tmp_path, mocker):
     args, _ = mock_move.call_args
     assert args[0] == test_file
     assert args[1] == tmp_path / "Documents"
+
+def test_handler_below_threshold_asks_never_moves(tmp_path, mocker):
+    """Step 6: a low-confidence file is indexed in place, never auto-moved."""
+    mock_move = mocker.patch("src.core.organizer.organizer.move_file")
+    mocker.patch(
+        "src.core.classifier.classifier.classify_with_confidence",
+        return_value=Classification("Documents", 0.45, None, {}),
+    )
+    mock_upsert = mocker.patch("src.services.db_service.db_service.upsert_file")
+
+    handler = DownloadHandler()
+    test_file = tmp_path / "test.txt"
+    test_file.write_text("content")
+
+    handler._process_file(test_file)
+
+    mock_move.assert_not_called()
+    mock_upsert.assert_called_once_with(test_file)
+
+
+def test_handler_risky_rule_never_auto_moves(tmp_path, mocker):
+    """Step 6.3: a risky rule forces ask even at high confidence."""
+    mock_move = mocker.patch("src.core.organizer.organizer.move_file")
+    mocker.patch(
+        "src.core.classifier.classifier.classify_with_confidence",
+        return_value=Classification("Setups", 0.95, None, {}),
+    )
+    config_service.config["rules"] = [
+        {"name": "risky-installers", "when": {"extensions": [".exe"]}, "then": {"risky": True}}
+    ]
+    mock_upsert = mocker.patch("src.services.db_service.db_service.upsert_file")
+
+    handler = DownloadHandler()
+    test_file = tmp_path / "installer.exe"
+    test_file.write_text("payload")
+
+    handler._process_file(test_file)
+
+    mock_move.assert_not_called()
+    mock_upsert.assert_called_once_with(test_file)
+
 
 def test_handler_skips_temp_suffix_files(tmp_path, mocker):
     """C4: partial download files (.crdownload) must never be moved."""

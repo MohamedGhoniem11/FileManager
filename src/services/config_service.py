@@ -19,7 +19,7 @@ import platformdirs
 
 from .logger import logger
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 DEFAULT_CONFIG = {
     "schema_version": SCHEMA_VERSION,
@@ -35,6 +35,13 @@ DEFAULT_CONFIG = {
         "Archives": [".zip", ".rar", ".7z", ".tar", ".gz"],
         "Audio": [".mp3", ".wav", ".flac", ".aac"]
     },
+    "confidence_thresholds": {
+        "auto": 0.80,
+        "ask": 0.50,
+        "categories": {}
+    },
+    "watch_locations": [],
+    "rules": [],
     "collision_strategy": "rename",
     "cleanup": {
         "dry_run": True,
@@ -59,7 +66,21 @@ DEFAULT_CONFIG = {
     "log_level": "INFO"
 }
 
-MIGRATIONS: Dict[int, Callable[[Dict[str, Any]], Dict[str, Any]]] = {}
+
+def _migrate_to_v2(loaded: Dict[str, Any]) -> Dict[str, Any]:
+    """Schema v2 adds confidence_thresholds, watch_locations, and rules."""
+    loaded.setdefault(
+        "confidence_thresholds",
+        {"auto": 0.80, "ask": 0.50, "categories": {}},
+    )
+    loaded.setdefault("watch_locations", [])
+    loaded.setdefault("rules", [])
+    return loaded
+
+
+MIGRATIONS: Dict[int, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
+    2: _migrate_to_v2,
+}
 
 class ConfigService:
     _instance = None
