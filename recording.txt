@@ -1,0 +1,84 @@
+# recording.txt — the 4 interview videos + exact jump points
+
+> Script + narration beats: `docs/06-demo-script.md`. Ground rules there too.
+> One tag per video state below — check out, record, check out next.
+> NEVER record against the real `~/Downloads`; always `demo/scratch-watch/`.
+
+---
+
+## Video 1 — "I Wrote This" (War Room, ~4 min)
+
+- **Source:** The War Room repo (hackathon archive) — NOT this repo.
+- **No checkout needed.**
+- Open: README architecture diagram, `agents/` tree, `lib/scorer.py`
+  (confidence weights), docs/architecture.md AGREE/CHALLENGE table.
+
+---
+
+## Video 2 — "The Honest Audit" (~5 min)
+
+- **Checkout:** `66402aa` (root commit — the pre-fix broken state)
+- Commands on screen (run from repo root of that commit):
+  - `python -m pytest --collect-only`  → collection error: `nlp_service` import doesn't exist
+  - AST check: module-level names vs imports (audit appendix docs/01-audit.md)
+- Show: severity table, the three truths (intelligence is theater; no safety layer; Others → orphans → "delete me").
+
+```
+git checkout 66402aa
+```
+
+---
+
+## Video 3 — "The Agentic Upgrade" (~8 min) — THE MONEY SHOT
+
+- **Checkout:** `rec/video-3-money` (HEAD — Steps 4-9 complete)
+- Exact command sequence, in this order, from repo root:
+
+```
+git checkout rec/video-3-money
+.venv/bin/python demo/reset_state.py
+.venv/bin/python demo/make_samples.py
+.venv/bin/python demo/record_video3_money.py
+```
+
+- Driver prints each beat with real values: analyzer reads INSIDE the PDF →
+  category+confidence+subcategory → gate verdict → journaled move →
+  low-confidence file asks/holds → human correction → similar file lands right.
+- Optional safety-groundwork variant (journal append-only trigger, undo,
+  provenance): `.venv/bin/python demo/record_video3_safety.py`
+
+---
+
+## Video 4 — "The Result & The Lessons" (~3 min)
+
+- **Checkout:** anywhere on `main` at HEAD.
+- Commands on screen:
+  - `git log --oneline` → the journey: audit → fix CI → journal → agents → tests (41 commits)
+  - `.venv/bin/python -m pytest -q` → 176 green
+- Show before/after table (docs/01-audit.md) + Q&A cheat-sheet.
+
+```
+git checkout main
+```
+
+---
+
+## Tag map (jump points)
+
+| Tag | Point | Use for |
+|---|---|---|
+| `66402aa` | root commit | Video 2 (broken pre-fix state) |
+| `step-4-intelligence` | intel layer | Video 3 (analyzer + confidence) |
+| `step-5-dedup-learning` | dedup + priors | Video 3 (near-dups, corrector loop) |
+| `step-6-trust` | gate + rules | Video 3 (auto/ask/hold, risky rules) |
+| `step-7-lifecycle` | policies + multi-location | outtake |
+| `step-8-crossplatform` | CI matrix | outtake |
+| `step-9-audit2` | health proposals | Video 3 outtake (propose→confirm) |
+| `rec/video-3-money` | HEAD | Video 3 |
+| `rec/video-3-safety` | Steps 1-3 | Video 3 safety variant |
+
+## Reset between takes (ALWAYS)
+
+```
+.venv/bin/python demo/reset_state.py
+```
