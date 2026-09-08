@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# commit-msg hook: Conventional Commits format, no vague subjects,
+# no duplicate subjects vs recent history.
+#
+# Install:  git config core.hooksPath .githooks
+# Bypass:   git commit --no-verify   (only for emergencies + follow-up fixup)
+
+MSG_FILE="$1"
+SUBJECT="$(grep -v '^#' "$MSG_FILE" | grep -v '^$' | head -n1 | sed 's/[[:space:]]*$//')"
+
+[ -n "$SUBJECT" ] || { echo "commit-msg: empty subject" >&2; exit 1; }
+
+# 1) Conventional Commits format: type(scope)!: subject
+if ! printf '%s' "$SUBJECT" | grep -Eq '^(feat|fix|docs|refactor|chore|test|perf|build|ci|style|revert)(\([a-z0-9._-]+\))?!?: '; then
+    echo "commit-msg: subject must be Conventional Commits — type(scope): summary" >&2
+    echo "  got:  $SUBJECT" >&2
+    echo "  e.g.: fix(observer): retry locked files before moving" >&2
+    exit 1
+fi
+
+# 2) Subject length: GitHub truncates at 72 chars
+LEN="${#SUBJECT}"
+if [ "$LEN" -gt 72 ]; then
+    echo "commit-msg: subject too long (${LEN}/72 chars)" >&2
+    echo "  $SUBJECT" >&2
+    exit 1
+fi
+
+# 3) Vague subjects — reject "update", "fix", "changes", etc.
+BODY="${SUBJECT#*: }"
+if printf '%s' "$BODY" | grep -Eqi '^(update|fix|change|changes|cleanup|stuff|work|misc|wip|minor|tweak|progress|done)$' \
+    || [ "$(printf '%s' "$BODY" | wc -w)" -lt 3 ]; then
+    echo "commit-msg: vague subject (describe WHAT and WHY in >=3 words)" >&2
+    echo "  got:  $SUBJECT" >&2
+    exit 1
+fi
+
+# 4) Duplicate subject vs recent history (last 30 commits)
+if git rev-parse --verify HEAD >/dev/null 2>&1; then
+    if git log --format=%s -30 | grep -Fqx "$SUBJECT"; then
+        echo "commit-msg: subject already used in the last 30 commits" >&2
+        echo "  $SUBJECT" >&2
+        echo "  Make this message unique — what is different about THIS change?" >&2
+        exit 1
+    fi
+fi
+
+exit 0

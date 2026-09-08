@@ -1,6 +1,8 @@
 # 06 — Demo Script: Screen Recording Guide for Interviews
 
 > A recording walkthrough that tells the "old → diagnosis → upgrade" story in ~20 minutes, with every claim shown on screen.
+>
+> **Recording status (as of Step 2):** Videos 1, 2 and 4 are recordable **now**. Video 3's File Council segment (confidence scoring, human gate, learning) describes roadmap **Steps 3–6, which are not built yet** — record the "Safety Layer groundwork" variant below today (it shows what exists), and re-record Video 3 once Step 6 lands. Every claim must be on screen; nothing here may be staged.
 
 ---
 
@@ -52,6 +54,16 @@
 
 ## Video 3 — "The Agentic Upgrade" (~8 min) — THE MONEY SHOT
 
+> **⏳ Recordable TODAY (Steps 1–2 only):** replace the File Council beats below with the **"safety layer groundwork"** variant:
+> 1. Run `python demo/reset_state.py` first — fresh config + DB + journal for the take.
+> 2. `python demo/make_samples.py` → `demo/scratch-downloads/` with the receipt PDF + near-dup images + opaque file.
+> 3. Point the app at that scratch folder, drop `invoice_amazon_march.pdf` in it, watch it classify and move.
+> 4. `sqlite3 ~/.local/share/FileManager/metadata.db "SELECT * FROM journal;"` — show the committed row (op_type, source, dest). That's write-before-action journaling in action.
+> 5. Try `DELETE FROM journal;` — show the DB-level trigger refusing it (append-only enforced by the database itself).
+> 6. Show `docs/05-roadmap.md` Step 3: undo replay is the next milestone — this is its foundation.
+>
+> The full File Council sequence below (0:00–7:00) is **recordable only after Steps 3–6**:
+
 **Goal:** the File Council demo. This is the "look how cool" reel.
 
 | Time | Action on screen | Script beat |
@@ -86,9 +98,11 @@
 
 ## Checklist before recording
 
-- [ ] pytest genuinely green + coverage command output visible
-- [ ] AST verification snippet ready to re-run live (Video 2)
-- [ ] Sample files ready in a scratch Downloads folder (receipt PDF, near-dup images, opaque file)
+- [ ] `pytest` genuinely green + coverage command output visible
+- [ ] AST verification snippet ready to re-run live (Video 2) — see [audit appendix](01-audit.md)
+- [ ] `python demo/reset_state.py` run — fresh config + DB + journal for this take
+- [ ] `python demo/make_samples.py` — generated `demo/scratch-downloads/` (receipt PDF, near-dup images, opaque file)
+- [ ] App pointed at `demo/scratch-downloads` as the watch folder (never the real Downloads)
 - [ ] Terminal theme + monospace font consistent across videos
 - [ ] `recording.txt` in repo root with timestamps
 

@@ -214,6 +214,10 @@ build_exe.bat
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+**Commit messages:** The repo ships a [`commit-msg` hook](.githooks/commit-msg) that
+enforces Conventional Commits (`feat(scope): summary`), rejects vague subjects,
+and forbids duplicate subjects. Enable it with `git config core.hooksPath .githooks`.
+
 ---
 
 ## 📄 License
