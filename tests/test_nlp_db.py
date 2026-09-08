@@ -4,9 +4,11 @@ Covers NLP intent detection, entity parsing, and SQLite indexing integrity.
 """
 import pytest
 from pathlib import Path
-from src.services.nlp_service import nlp_service
+from src.services.nlp_service import get_nlp_service
 from src.services.db_service import db_service
 from src.core.config_agent import config_agent
+
+nlp_service = get_nlp_service()
 
 def test_nlp_search_intent():
     """Verifies that search queries are correctly parsed."""

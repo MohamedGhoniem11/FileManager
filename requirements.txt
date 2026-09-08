@@ -1,8 +1,8 @@
 watchdog
 spacy
 customtkinter
-winshell
-pypiwin32
+winshell; sys_platform == "win32"
+pypiwin32; sys_platform == "win32"
 pyyaml
 pytest
 pytest-mock

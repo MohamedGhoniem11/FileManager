@@ -1,21 +1,34 @@
 import os
 import sys
-import winshell
 from pathlib import Path
-from win32com.client import Dispatch # type: ignore
 from src.services.logger import logger
+
+try:
+    import winshell
+    from win32com.client import Dispatch  # type: ignore
+    _WINDOWS_AVAILABLE = True
+except ImportError:
+    winshell = None
+    Dispatch = None
+    _WINDOWS_AVAILABLE = False
+
+# Tracks whether non-frozen dev mode can map back to main.py
+_HAS_MAIN_INFO = hasattr(sys.modules.get('__main__', None), '__file__')
 
 class StartupService:
     """
     Manages the application's auto-startup entry on Windows.
     Uses the user's Startup folder (shell:startup) to avoid needing Admin privileges.
+    On non-Windows platforms, all operations are safe no-ops.
     """
 
     def __init__(self):
-        self.startup_dir = Path(winshell.startup())
-        self.link_path = self.startup_dir / "FileManagerPro.lnk"
+        if not _WINDOWS_AVAILABLE:
+            logger.warning("StartupService requires Windows; operations disabled.")
+        self.startup_dir = Path(winshell.startup()) if winshell else None
+        self.link_path = self.startup_dir / "FileManagerPro.lnk" if self.startup_dir else None
         self.executable_path = sys.executable if getattr(sys, 'frozen', False) else None
-        self.script_path = str(Path(sys.modules['__main__'].__file__).parent.parent / "main.py") if not self.executable_path else None
+        self.script_path = str(Path(sys.modules['__main__'].__file__).parent.parent / "main.py") if not self.executable_path and _HAS_MAIN_INFO else None
         
         # Determine target: The EXE if frozen, else pythonw.exe running main.py
         if getattr(sys, 'frozen', False):
@@ -32,10 +45,12 @@ class StartupService:
 
     def is_enabled(self) -> bool:
         """Checks if the startup shortcut exists."""
-        return self.link_path.exists()
+        return bool(self.link_path) and self.link_path.exists()
 
     def enable_startup(self):
         """Creates a shortcut in the Windows Startup folder."""
+        if not _WINDOWS_AVAILABLE or not self.startup_dir:
+            return
         try:
             shell = Dispatch('WScript.Shell')
             shortcut = shell.CreateShortCut(str(self.link_path))
@@ -50,6 +65,8 @@ class StartupService:
 
     def disable_startup(self):
         """Removes the shortcut from the Windows Startup folder."""
+        if not _WINDOWS_AVAILABLE or not self.link_path:
+            return
         try:
             if self.link_path.exists():
                 os.remove(self.link_path)

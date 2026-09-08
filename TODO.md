@@ -6,7 +6,7 @@
 - [x] Intelligent classification engine
 - [x] Modern CustomTkinter GUI
 - [x] Hot-reloading JSON configuration
-- [x] Automated testing suite (9 tests)
+- [x] Automated testing suite (25 tests, CI-collectable on all platforms)
 - [x] CI/CD pipeline (GitHub Actions)
 - [x] Standalone EXE build script
 

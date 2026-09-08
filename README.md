@@ -1,7 +1,7 @@
 # FileManager → Agentic FileManager
 
 ![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)
-![Platform](https://img.shields.io/badge/platform-Windows-blue.svg)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)
 
 > **The upgrade story lives in [`docs/`](docs/README.md)** — honest audit with evidence, the old-vs-new transformation, the agentic architecture ("File Council"), and a screen-recording demo script.
 >
@@ -94,17 +94,26 @@ graph TD
 
 **Problem**: Browser downloads create temporary files (`.crdownload`) that are locked during the download process. Attempting to move these files immediately caused crashes.
 
-**Solution**: Implemented a `FileLock` retry mechanism in `observer.py`. The system now polls and waits for file handle release before attempting filesystem operations.
+**Solution**: `observer.py` gates every move behind a real readiness check: temporary suffixes (`.crdownload`, `.part`, `.tmp`, ...) are skipped outright, files that fail to open (locked by another process) are retried, and a file is only moved once its size is stable across two samples — no fixed-sleep guesswork.
 
 ```python
 # Simplified example
-def safe_move(src, dest, max_retries=5):
-    for attempt in range(max_retries):
+def _is_ready(self, file_path, retries=5, delay=0.2):
+    for _ in range(retries):
+        if not file_path.exists():
+            return False
+        if file_path.suffix.lower() in TEMP_SUFFIXES:
+            time.sleep(delay); continue
         try:
-            shutil.move(src, dest)
-            break
-        except PermissionError:
-            time.sleep(0.5)
+            with file_path.open("rb"):
+                pass
+            size_1 = file_path.stat().st_size
+            time.sleep(delay)
+            if file_path.stat().st_size == size_1:
+                return True
+        except (PermissionError, OSError):
+            time.sleep(delay)
+    return False
 ```
 
 ### 2. PyInstaller Packaging Issues
@@ -126,13 +135,20 @@ hiddenimports=[
 
 **Problem**: Moving a file triggered a "File Modified" event, which triggered another move operation, creating an infinite recursion loop.
 
-**Solution**: The `ObserverService` now filters out events originating from destination folders and implements a cooldown period to prevent cascading triggers.
+**Solution**: The `DownloadHandler` processes `on_created` and `on_moved` events (the moves a watcher actually cares about), and a file already sitting in its destination category folder is indexed and skipped rather than moved again — so no event chain can feed back into a second move.
 
 ```python
-def on_modified(self, event):
-    if event.src_path in self.destination_paths:
-        return  # Ignore self-triggered events
-    # ... process event
+def on_created(self, event):
+    if event.is_directory:
+        return
+    self._process_file(Path(event.src_path))
+
+def _process_file(self, file_path):
+    category = classifier.classify(file_path)
+    target_dir = file_path.parent / category
+    if file_path.parent.name == category:   # already home → index only
+        db_service.upsert_file(file_path)
+        return
 ```
 
 ### 4. Configuration Corruption
@@ -156,8 +172,8 @@ def update_config(self, updates):
 
 ```bash
 # Clone the repository
-git clone https://github.com/MohamedGhoniem11/File-organizer-app
-cd filemanager-pro
+git clone https://github.com/MohamedGhoniem11/FileManager
+cd FileManager
 
 # Install dependencies
 pip install -r requirements.txt

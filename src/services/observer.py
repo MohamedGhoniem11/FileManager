@@ -37,11 +37,33 @@ class DownloadHandler(FileSystemEventHandler):
             return
         db_service.remove_file(Path(event.src_path))
 
+    def _is_ready(self, file_path: Path, retries: int = 5, delay: float = 0.2) -> bool:
+        """True when the file is completely written: permission-released and size-stable."""
+        temp_suffixes = {".crdownload", ".part", ".partial", ".download", ".tmp", ".temp"}
+        for _ in range(retries):
+            if not file_path.exists():
+                return False
+            if file_path.suffix.lower() in temp_suffixes:
+                time.sleep(delay)
+                continue
+            try:
+                with file_path.open("rb"):
+                    pass
+                size_1 = file_path.stat().st_size
+                time.sleep(delay)
+                size_2 = file_path.stat().st_size
+                if size_1 == size_2:
+                    return True
+            except (PermissionError, OSError):
+                time.sleep(delay)
+        return False
+
     def _process_file(self, file_path: Path):
-        """Classifies and moves a single file."""
-        # Small delay to ensure file is fully written/unlocked by OS
-        time.sleep(1)
-        
+        """Classifies and moves a single file once it is fully written."""
+        if not self._is_ready(file_path):
+            logger.warning(f"File never became ready; skipping: {file_path}")
+            return
+
         if not file_path.exists():
             return
 

@@ -9,11 +9,12 @@
 
 | # | Work | Fixes | Verification |
 |---|---|---|---|
+| 1.0 | Platform-marker `winshell`/`pypiwin32` in `requirements.txt` *(found during setup: pip install fails on Linux)* | C6 | `pip install -r requirements.txt` on ubuntu succeeds |
 | 1.1 | Import `logger` in `classifier.py` | C1 | `pytest` + manual config-change run |
 | 1.2 | Fix `test_nlp_db.py` import (use `get_nlp_service()`) | C2 | `pytest` collects + passes |
 | 1.3 | Platform-guard `startup_service.py` (import only on Windows) | C3 | import on Linux/macOS succeeds |
 | 1.4 | Replace `time.sleep(1)` with readiness retry (`PermissionError` loop + partial-size guard) in `observer.py` | C4 | large-download test: no half-moves |
-| 1.5 | Correct README claims (FileLock, cooldown, test count) | C4 | README matches code |
+| 1.5 | Correct README claims (FileLock, cooldown, clone URL, badge, test count) | C4 | README matches code |
 
 **Gate:** `pytest` green end-to-end. This alone turns the red CI badge into a real one.
 

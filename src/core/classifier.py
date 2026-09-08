@@ -7,6 +7,7 @@ Logic for mapping file extensions to user-defined categories.
 """
 import os
 from src.services.config_service import config_service
+from src.services.logger import logger
 
 class Classifier:
     """Handles the categorization of files based on their extensions and configuration."""

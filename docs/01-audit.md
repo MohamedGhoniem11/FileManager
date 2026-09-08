@@ -54,6 +54,13 @@ The old FileManager is an ambitious beginner-to-intermediate project with a genu
 - **Impact:** docs vs code drift. The "engineering challenges" section is fiction, which is worse than having no docs — it misleads.
 - README also claims a cooldown filter for event loops; the `on_modified` filter exists but the cooldown mechanism does not.
 
+### C6. `requirements.txt` cannot install on Linux — CI dies before tests run *(found during Step 1 setup)*
+
+- **File:** `requirements.txt` — `winshell` and `pypiwin32` are Windows-only packages
+- **Evidence:** `pip install -r requirements.txt` on Linux fails at the `pypiwin32` wheel build (`SyntaxError` from its setup.py, platform-unsupported). CI's `.github/workflows/tests.yml` runs `ubuntu-latest` + `pip install -r requirements.txt` → **CI fails at dependency install, before a single test executes.**
+- **Impact:** the CI badge was red since the repo's first push — worse than C2 (which at least let tests collect on a machine that could install). Compounded the C2 problem: even a fixed suite could never run on the CI platform.
+- **Fix (in Step 1):** environment-markers — `winshell; sys_platform == "win32"` and `pypiwin32; sys_platform == "win32"` (pip's native conditional syntax). Linux installs skip both; Windows still gets them.
+
 ### H1. `db_service.py` swallows errors with empty `except: pass`
 
 - **File:** `src/services/db_service.py` — empty exception handler.

@@ -11,6 +11,12 @@ def test_classifier_logic():
     assert classifier.classify(Path("test.pdf")) == "PDFs"
     assert classifier.classify(Path("unknown.xyz")) == "Others"
 
+def test_classifier_refresh_on_config_change():
+    """C1: config-change callback must not raise (logger was previously missing)."""
+    classifier = Classifier()
+    classifier.refresh_on_config_change({})  # would NameError before the logger import fix
+    assert classifier.classify(Path("test.jpg")) == "Images"
+
 def test_organizer_rename_logic(tmp_path):
     organizer = Organizer()
     

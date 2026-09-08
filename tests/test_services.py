@@ -9,6 +9,8 @@ def test_observer_start_stop(mocker):
     mocker.patch("watchdog.observers.Observer.start")
     mocker.patch("watchdog.observers.Observer.stop")
     mocker.patch("watchdog.observers.Observer.join")
+    # Mock the background sync so the test never touches the real watch directory
+    mocker.patch.object(observer_service, "sync_existing_files")
     
     observer_service.start()
     assert observer_service.is_running is True
@@ -32,6 +34,29 @@ def test_handler_process_file(tmp_path, mocker):
     args, _ = mock_move.call_args
     assert args[0] == test_file
     assert args[1] == tmp_path / "Documents"
+
+def test_handler_skips_temp_suffix_files(tmp_path, mocker):
+    """C4: partial download files (.crdownload) must never be moved."""
+    handler = DownloadHandler()
+    partial_file = tmp_path / "movie.mkv.crdownload"
+    partial_file.write_text("partial content")
+    
+    # Short retries so the test is fast; the temp suffix should block readiness
+    assert handler._is_ready(partial_file, retries=1, delay=0.01) is False
+
+def test_handler_waits_for_stable_size(tmp_path, mocker):
+    """C4: a file whose size is still changing is not ready."""
+    handler = DownloadHandler()
+    growing_file = tmp_path / "growing.bin"
+    growing_file.write_bytes(b"x" * 10)
+
+    # Simulate an in-progress write: each pair of size samples differs (10, 100, 10, 100...)
+    sizes = iter([10, 100, 10, 100])
+    from types import SimpleNamespace
+    mocker.patch("pathlib.Path.stat", side_effect=lambda: SimpleNamespace(st_size=next(sizes)))
+    mocker.patch("src.services.observer.time.sleep")
+
+    assert handler._is_ready(growing_file, retries=2, delay=0.01) is False
 
 def test_observer_restart_on_config(mocker):
     mocker.patch("src.services.observer.ObserverService.start")
