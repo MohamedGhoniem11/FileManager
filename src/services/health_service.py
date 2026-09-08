@@ -7,12 +7,28 @@ Provides thread-safe access to the Health Engine and Organizer for GUI integrati
 import threading
 import time
 from pathlib import Path
-from typing import Dict, List, Callable, Optional
+from typing import Dict, List, Callable, Optional, NamedTuple
 from src.services.logger import logger
 from src.services.config_service import config_service
 from src.core.health_engine import health_engine
 from src.core.organizer import organizer
 from src.services.db_service import db_service
+
+
+class ProposedAction(NamedTuple):
+    """One surfaced mutation from Health Audit 2.0 (roadmap 9.1/9.2).
+
+    ``requires_confirmation`` gates every destructive or non-undoable step:
+    the auto-cleanup only ever performs journaled, undoable moves; anything
+    else is previewed and left for the user to confirm explicitly.
+    """
+    kind: str
+    source: Path
+    target: Optional[Path]
+    reason: str
+    undoable: bool
+    requires_confirmation: bool
+
 
 class HealthService:
     """Service layer for coordinating directory health checks and maintenance tasks."""
@@ -38,14 +54,98 @@ class HealthService:
         finally:
             self.is_scanning = False
 
+    def propose_actions(self, report: Dict) -> List[ProposedAction]:
+        """Pure preview: every mutation cleanup would take, none executed.
+
+        Step 9 (ADR-016 spirit): deletes are never auto-suggested as safe —
+        duplicates/orphans propose journaled moves (undoable), zero-byte
+        files move to a quarantine trash folder, and true deletions
+        (orphan delete strategy, empty folder rmdir) require confirmation.
+        """
+        cleanup_cfg = config_service.get("cleanup", {})
+        actions: List[ProposedAction] = []
+
+        # 1. Duplicates: keep oldest (by mtime), move the rest to Misc
+        if cleanup_cfg.get("deduplicate", True):
+            for paths in report.get("duplicates", {}).values():
+                if len(paths) < 2:
+                    continue
+                ordered = sorted(paths, key=lambda p: p.stat().st_mtime if p.exists() else 0)
+                keeper = ordered[0]
+                for dup in ordered[1:]:
+                    actions.append(ProposedAction(
+                        kind="deduplicate_move",
+                        source=dup,
+                        target=dup.parent / "Misc",
+                        reason=f"duplicate of {keeper.name}",
+                        undoable=True,
+                        requires_confirmation=False,
+                    ))
+
+        # 2. Zero-byte: quarantine in watch/.Trash/FileManager-proposed
+        if cleanup_cfg.get("remove_zero_byte_files", True):
+            for path in report.get("zero_byte_files", []):
+                watch = Path(config_service.get("watch_directory") or path.parent)
+                actions.append(ProposedAction(
+                    kind="zero_byte_quarantine",
+                    source=path,
+                    target=watch / ".Trash" / "FileManager-proposed" / path.name,
+                    reason="zero-byte file quarantined, not deleted",
+                    undoable=True,
+                    requires_confirmation=False,
+                ))
+
+        # 3. Orphans: move_to_misc by default; real delete only on explicit strategy
+        strategy = cleanup_cfg.get("handle_orphans", "ignore")
+        if strategy != "ignore":
+            for path in report.get("orphans", []):
+                if strategy == "delete":
+                    actions.append(ProposedAction(
+                        kind="orphan_delete",
+                        source=path,
+                        target=None,
+                        reason="orphan deletion (explicitly requested)",
+                        undoable=False,
+                        requires_confirmation=True,
+                    ))
+                elif strategy == "move_to_misc":
+                    actions.append(ProposedAction(
+                        kind="orphan_move",
+                        source=path,
+                        target=path.parent / "Misc",
+                        reason="orphan moved to Misc",
+                        undoable=True,
+                        requires_confirmation=False,
+                    ))
+
+        # 4. Empty folders: rmdir is not journaled -> always confirm
+        if cleanup_cfg.get("remove_empty_folders", True):
+            folders = sorted(
+                report.get("empty_folders", []),
+                key=lambda x: len(x.parts),
+                reverse=True,
+            )
+            for folder in folders:
+                actions.append(ProposedAction(
+                    kind="empty_folder_remove",
+                    source=folder,
+                    target=None,
+                    reason="empty folder removal (not journaled)",
+                    undoable=False,
+                    requires_confirmation=True,
+                ))
+
+        return actions
+
     def execute_cleanup(self, report: Dict) -> Dict:
         """
-        Takes actions (delete/move) based on the report and config.
-        Default is dry-run.
+        Applies the propose->confirm flow: only undoable, non-confirmation
+        actions run automatically (journaled moves). Default is dry-run.
         """
         cleanup_cfg = config_service.get("cleanup", {})
         dry_run = cleanup_cfg.get("dry_run", True)
-        
+        actions = self.propose_actions(report)
+
         stat_summary = {
             "deleted": 0,
             "moved": 0,
@@ -55,55 +155,27 @@ class HealthService:
         if dry_run:
             logger.info("DRY-RUN MODE: No real changes will be made.")
 
-        # 1. Handle Duplicates
-        if cleanup_cfg.get("deduplicate", True):
-            for f_hash, paths in report["duplicates"].items():
-                # Keep the first one, delete others
-                for path in paths[1:]:
-                    if not dry_run:
-                        size = path.stat().st_size
-                        organizer.delete_file(path)
-                        stat_summary["deleted"] += 1
-                        stat_summary["saved_bytes"] += size
-                    else:
-                        logger.info(f"[DRY-RUN] Would delete duplicate: {path}")
-
-        # 2. Handle Zero-byte files
-        if cleanup_cfg.get("remove_zero_byte_files", True):
-            for path in report["zero_byte_files"]:
-                if not dry_run:
-                    organizer.delete_file(path)
-                    stat_summary["deleted"] += 1
-                else:
-                    logger.info(f"[DRY-RUN] Would delete 0-byte file: {path}")
-
-        # 3. Handle Orphans
-        strategy = cleanup_cfg.get("handle_orphans", "ignore")
-        if strategy != "ignore":
-            for path in report["orphans"]:
-                if not dry_run:
-                    if strategy == "delete":
-                        organizer.delete_file(path)
-                        stat_summary["deleted"] += 1
-                    elif strategy == "move_to_misc":
-                        organizer.move_to_misc(path)
-                        stat_summary["moved"] += 1
-                else:
-                    logger.info(f"[DRY-RUN] Would {strategy} orphan: {path}")
-
-        # 4. Handle Empty Folders
-        if cleanup_cfg.get("remove_empty_folders", True):
-            # Sort by depth (deepest first) to handle nested empty folders
-            sorted_folders = sorted(report["empty_folders"], key=lambda x: len(x.parts), reverse=True)
-            for folder in sorted_folders:
-                if not dry_run:
-                    try:
-                        folder.rmdir()
-                        logger.info(f"Removed empty folder: {folder}")
-                    except:
-                        pass
-                else:
-                    logger.info(f"[DRY-RUN] Would remove empty folder: {folder}")
+        for action in actions:
+            if action.requires_confirmation:
+                logger.info(
+                    f"[PREVIEW] {action.kind}: {action.source} requires confirmation; skipped."
+                )
+                continue
+            if dry_run:
+                logger.info(
+                    f"[DRY-RUN] Would {action.kind}: {action.source} -> {action.target}"
+                )
+                continue
+            if action.target is None:
+                continue
+            try:
+                size = action.source.stat().st_size
+            except OSError:
+                size = 0
+            final = organizer.move_file(action.source, action.target)
+            if final:
+                stat_summary["moved"] += 1
+                stat_summary["saved_bytes"] += size
 
         return stat_summary
 
