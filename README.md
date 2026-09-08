@@ -51,10 +51,16 @@ graph TD
     SvcHub --> Obs
     SvcHub --> NLP
     SvcHub --> Health
+    Obs --> Gate
+    Obs --> Rules
     Obs --> CoreHub
     NLP --> CoreHub
+    Health --> CoreHub
     CoreHub --> Org
     CoreHub --> Classifier
+    CoreHub --> Analyzer
+    CoreHub --> Priors
+    CoreHub --> Dedup
     CoreHub --> DB
     subgraph Services
         SvcHub((Services))
@@ -62,29 +68,34 @@ graph TD
         NLP
         Health
     end
-    subgraph Core
+    subgraph Core "File Council (Steps 4-9)"
         CoreHub((Core))
-        Org
+        Analyzer
         Classifier
+        Priors
+        Gate
+        Rules
+        Dedup
+        Org
         DB
     end
 ```
 
 ### Layer Breakdown
 
-- **`src/services/`** - Singleton managers handling configuration, logging, and file observation
-- **`src/core/`** - Pure business logic for file operations, hashing, and NLP parsing
+- **`src/services/`** - Singleton managers: config (schema-versioned, auto-migrated), SQLite DB + append-only journal, observer, health audit, startup, query parsing
+- **`src/core/`** - Pure business logic — the "File Council": Analyzer (content profiles), Classifier (confidence scoring), Priors (self-learning), Gate (auto/ask/hold), Rules Agent, Dedup (fingerprints), Organizer (journaled, collision-safe moves), Lifecycle policies, Health engine
 - **`src/gui/`** - View components built with `customtkinter`, decoupled from business logic
 
 ---
 
 ## 🔧 Technical Stack
 
-- **File Monitoring**: `watchdog` for real-time filesystem events
-- **NLP Processing**: `spaCy` with `en_core_web_sm` model
-- **Data Persistence**: `SQLite` for metadata and query history
+- **File Monitoring**: `watchdog` for real-time filesystem events (multi-location)
+- **Query Parsing**: deterministic rule engine — no heavyweight ML model ([ADR-011](docs/decisions/ADR-011-classification-engine-rules-plus-llm.md))
+- **Data Persistence**: `SQLite` (WAL) for metadata, query history, and the append-only transaction journal
 - **UI Framework**: `customtkinter` for modern dark-mode interface
-- **File Integrity**: SHA-256 hashing for duplicate detection
+- **File Integrity**: SHA-256 + content fingerprints for duplicate and near-duplicate detection
 
 ---
 
@@ -120,24 +131,27 @@ def _is_ready(self, file_path, retries=5, delay=0.2):
 
 **Problem**: The app depended on its working directory for `config.json` and log files (audit [H4](docs/01-audit.md)). Launched from anywhere else — or as a packaged EXE — it silently wrote state to the wrong place.
 
-**Solution**: All application state now resolves through `platformdirs` to OS-standard user directories: config → `user_config_dir("FileManager")`, logs → `user_log_dir("FileManager")`, database/journal → `user_data_dir("FileManager")` ([ADR-014](docs/decisions/ADR-014-cross-platform-platformdirs.md)). A one-time migration copies a legacy CWD-relative `config/config.json` if present. `build_exe.bat` bundles with a plain onefile PyInstaller build; the heavyweight spaCy bundling config is deliberately **not** maintained because the 700MB model is slated for removal (audit [M1](docs/01-audit.md), roadmap Step 4).
+**Solution**: All application state now resolves through `platformdirs` to OS-standard user directories: config → `user_config_dir("FileManager")`, logs → `user_log_dir("FileManager")`, database/journal → `user_data_dir("FileManager")` ([ADR-014](docs/decisions/ADR-014-cross-platform-platformdirs.md)). A one-time migration copies a legacy CWD-relative `config/config.json` if present. `build_exe.bat` bundles with a plain onefile PyInstaller build; the ~700MB spaCy model was **removed entirely** ([ADR-011](docs/decisions/ADR-011-classification-engine-rules-plus-llm.md), audit [M1](docs/01-audit.md)), so packaging no longer ships any heavyweight model.
 
 ### 3. Infinite Event Loops
 
 **Problem**: Moving a file triggered a "File Modified" event, which triggered another move operation, creating an infinite recursion loop.
 
-**Solution**: The `DownloadHandler` processes `on_created` and `on_moved` events (the moves a watcher actually cares about), and a file already sitting in its destination category folder is indexed and skipped rather than moved again — so no event chain can feed back into a second move.
+**Solution**: The `DownloadHandler` processes `on_created` and `on_moved` events (the moves a watcher actually cares about), a file that fails the readiness check is skipped, and a file already sitting in its destination category folder is indexed and skipped rather than moved again — so no event chain can feed back into a second move. Since Step 6 the flow is gated: only `auto` decisions move; `ask`/`hold` decisions index the file in place and leave it for the user.
 
 ```python
-def on_created(self, event):
-    if event.is_directory:
-        return
-    self._process_file(Path(event.src_path))
-
 def _process_file(self, file_path):
-    category = classifier.classify(file_path)
-    target_dir = file_path.parent / category
-    if file_path.parent.name == category:   # already home → index only
+    if not self._is_ready(file_path):          # size-stable, not locked
+        return
+    classification = classifier.classify_with_confidence(file_path)
+    decision = gate_decide(classification.category,
+                           classification.confidence,
+                           config_service.get("confidence_thresholds"))
+    if decision.action != "auto":              # ask/hold → index only
+        db_service.upsert_file(file_path)
+        return
+    target_dir = file_path.parent / classification.category
+    if file_path.parent == target_dir:         # already home → index only
         db_service.upsert_file(file_path)
         return
 ```
@@ -178,7 +192,6 @@ cd FileManager
 
 # Install dependencies
 pip install -r requirements.txt
-python -m spacy download en_core_web_sm
 
 # Run the application
 python -m src.main
@@ -197,10 +210,16 @@ build_exe.bat
 
 ## 🧪 Key Features
 
-- **Real-time Monitoring** - Instant file detection and sorting via `watchdog`
-- **Natural Language Interface** - Query files with commands like "Find my PDFs" or "Cleanup downloads"
-- **Smart Cleanup** - Identifies duplicates (SHA-256), orphans, and zero-byte files
-- **Dry-Run Mode** - Preview cleanup operations before execution
+- **Real-time Monitoring** - Instant file detection and sorting via `watchdog`, multi-location with per-location rule scoping
+- **Content Intelligence** - The Analyzer extracts PDF text, EXIF metadata, code heads, and archive manifests; the Classifier proposes with confidence scores, not blind buckets
+- **Human-in-the-Loop Gate** - Below-threshold files always **ask** (never auto-move); risky rules cap confidence so they can never auto-fire
+- **Self-Learning Priors** - Correct a misclassification once and the priors update; the next similar file lands right
+- **Natural Language Interface** - Query files with commands like "Find my PDFs" or "Cleanup downloads" (deterministic rule engine — no heavy model)
+- **Smart Dedup** - SHA-256 exact duplicates + perceptual/text fingerprints for near-duplicate clustering
+- **Safe Operations** - Every move is journaled append-only (DB-trigger enforced); journal-backed undo and provenance ("where did X go?")
+- **Health Audit** - Proposes safe undoable actions for review first; cleanup never deletes without explicit ask
+- **Dry-Run Mode** - Preview rules and cleanup before anything executes
+- **Lifecycle Policies** - Age/size-based archive policies with scheduled runs
 - **Auto-Startup Integration** - Set-and-forget operation with Windows startup
 - **Activity Logging** - Real-time dashboard with operation history
 

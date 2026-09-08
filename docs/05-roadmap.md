@@ -39,17 +39,17 @@
 
 **Gate:** undo is unit-tested ([ADR-016](decisions/ADR-016-safe-journal-backed-undo.md)) and demoable via `Organizer.undo_last()` — GUI wiring rides on later GUI steps.
 
-## Step 4 — The intelligence story (Analyzer + content classification)
+## Step 4 — The intelligence story (Analyzer + content classification) ✅ Done
 
 | # | Work | Fixes | Verification |
 |---|---|---|---|
 | 4.1 | `ContentProfile` extraction (PDF text, EXIF, code head, archive manifest) | M4 | fixture files → expected profiles |
 | 4.2 | Classifier uses ContentProfile + priors, outputs confidence | M4, M1 | classification accuracy snapshot test |
-| 4.3 | Kill spaCy theater / regex-only paths | M1, M2 | [ADR-011](decisions/ADR-011-nlp-classification-engine.md) decision implemented |
+| 4.3 | Kill spaCy theater / regex-only paths | M1, M2 | [ADR-011](decisions/ADR-011-classification-engine-rules-plus-llm.md) decision implemented |
 
 **Gate:** a receipt and a book (both `.pdf`) classify differently, with confidence.
 
-## Step 5 — Deduplication + learning
+## Step 5 — Deduplication + learning ✅ Done
 
 | # | Work | Fixes | Verification |
 |---|---|---|---|
@@ -58,7 +58,7 @@
 
 **Gate:** duplicate clusters show "N files ≈ 3 real versions"; correction learning is tested.
 
-## Step 6 — Trust & configurability (gates + rules)
+## Step 6 — Trust & configurability (gates + rules) ✅ Done
 
 | # | Work | Fixes | Verification |
 |---|---|---|---|
@@ -68,21 +68,21 @@
 
 **Gate:** below-threshold files always ask; risky rules never auto-fire.
 
-## Step 7 — Lifecycle + multi-location
+## Step 7 — Lifecycle + multi-location ✅ Done
 
 | # | Work | Fixes | Verification |
 |---|---|---|---|
 | 7.1 | Age/size lifecycle policies + scheduled runs | (B6) | aging fixture → archive action |
 | 7.2 | Multi-location monitoring, per-location rules | (B7) | two watch folders, independent rules |
 
-## Step 8 — Cross-platform polish
+## Step 8 — Cross-platform polish ✅ Done
 
 | # | Work | Fixes | Verification |
 |---|---|---|---|
 | 8.1 | Remove remaining Windows-only import paths | C3 | CI runs the suite on ubuntu + windows + macos |
 | 8.2 | `platformdirs` config/log/cache homes everywhere | H4 | packaged and source runs |
 
-## Step 9 — Health Audit 2.0 + assistant polish
+## Step 9 — Health Audit 2.0 + assistant polish ✅ Done
 
 | # | Work | Fixes | Verification |
 |---|---|---|---|

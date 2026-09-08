@@ -63,7 +63,7 @@ Drag a file to the "wrong" place → the system learns the mapping + updates con
 
 ## B10. Assistant That Actually Assists
 
-- Replace regex theater with real intent parsing (small LLM or solid rules engine — decision recorded in [ADR-011](decisions/ADR-011-nlp-classification-engine.md))
+- Replace regex theater with real intent parsing (small LLM or solid rules engine — decision recorded in [ADR-011](decisions/ADR-011-classification-engine-rules-plus-llm.md))
 - Actions always show a proposed change + confirmation (already the chat pattern; make it universal)
 
 ---
