@@ -47,22 +47,15 @@ class App(ctk.CTk):
         self.logs_btn = self._make_nav_button("Logs", "logs")
         self.logs_btn.grid(row=2, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
 
-        self.settings_btn = self._make_nav_button("Settings", "settings")
-        self.settings_btn.grid(row=3, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
-
         self.maintenance_btn = self._make_nav_button("Maintenance", "maintenance")
-        self.maintenance_btn.grid(row=4, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
+        self.maintenance_btn.grid(row=3, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
 
         self.assistant_btn = self._make_nav_button("Assistant", "assistant")
-        self.assistant_btn.grid(row=5, column=0, padx=Theme.PAD_MD, pady=(2, 0), sticky="ew")
+        self.assistant_btn.grid(row=4, column=0, padx=Theme.PAD_MD, pady=(2, 0), sticky="ew")
 
-        self.version_label = ctk.CTkLabel(
-            self.sidebar_frame,
-            text="Standard File Manager — Pro Edition",
-            text_color=Theme.TEXT_MUTED,
-            font=ctk.CTkFont(size=Theme.FONT_SMALL_SIZE - 2),
-        )
-        self.version_label.grid(row=7, column=0, padx=Theme.PAD_LG, pady=(0, 16))
+        # Settings pinned to the bottom of the sidebar (desktop-app pattern)
+        self.settings_btn = self._make_nav_button("⚙ Settings", "settings")
+        self.settings_btn.grid(row=7, column=0, padx=Theme.PAD_MD, pady=(0, Theme.PAD_LG), sticky="ew")
 
         # Main Content Frames
         self.dashboard_frame = DashboardFrame(self, corner_radius=0, fg_color="transparent")
