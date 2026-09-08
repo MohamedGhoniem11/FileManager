@@ -5,7 +5,12 @@ from src.services.observer import observer_service, DownloadHandler
 from src.services.config_service import config_service
 from src.core.classifier import Classification
 
-def test_observer_start_stop(mocker):
+def test_observer_start_stop(tmp_path, mocker):
+    # Hermetic watch dir (CI runners have no ~/Downloads)
+    watch_dir = tmp_path / "Downloads"
+    watch_dir.mkdir()
+    config_service.config["watch_directory"] = str(watch_dir)
+
     # Mock observer to not actually start threads
     mocker.patch("watchdog.observers.Observer.start")
     mocker.patch("watchdog.observers.Observer.stop")
