@@ -12,9 +12,6 @@ except ImportError:
     Dispatch = None
     _WINDOWS_AVAILABLE = False
 
-# Tracks whether non-frozen dev mode can map back to main.py
-_HAS_MAIN_INFO = hasattr(sys.modules.get('__main__', None), '__file__')
-
 class StartupService:
     """
     Manages the application's auto-startup entry on Windows.
@@ -28,7 +25,6 @@ class StartupService:
         self.startup_dir = Path(winshell.startup()) if winshell else None
         self.link_path = self.startup_dir / "FileManagerPro.lnk" if self.startup_dir else None
         self.executable_path = sys.executable if getattr(sys, 'frozen', False) else None
-        self.script_path = str(Path(sys.modules['__main__'].__file__).parent.parent / "main.py") if not self.executable_path and _HAS_MAIN_INFO else None
         
         # Determine target: The EXE if frozen, else pythonw.exe running main.py
         if getattr(sys, 'frozen', False):

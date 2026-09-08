@@ -217,7 +217,7 @@ class ChatFrame(ctk.CTkFrame):
 
 
 
-        elif intent == "debug_info" or intent == "show_stats":
+        elif intent == "debug_info":
              stats = db_service.get_stats()
              if "error" in stats:
                  msg = f"Error accessing DB: {stats['error']}"

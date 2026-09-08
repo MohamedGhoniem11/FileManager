@@ -156,17 +156,6 @@ class Organizer:
         misc_dir = file_path.parent / "Misc"
         return self.move_file(file_path, misc_dir)
 
-    def backup_file(self, source_path: Path, backup_dir: Path):
-        """Copies a file to a backup directory before destructive actions."""
-        try:
-            backup_dir.mkdir(parents=True, exist_ok=True)
-            dest = backup_dir / source_path.name
-            shutil.copy2(source_path, dest)
-            return dest
-        except Exception as e:
-            logger.error(f"Backup failed for {source_path}: {e}")
-            return None
-
     def _get_unique_path(self, path: Path) -> Path:
         """Appends a counter to the filename to ensure uniqueness."""
         counter = 1

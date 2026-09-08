@@ -63,7 +63,6 @@ DEFAULT_CONFIG = {
         "show_logs": True,
         "window_size": "1000x600"
     },
-    "max_folder_files": 1000,
     "log_level": "INFO"
 }
 
