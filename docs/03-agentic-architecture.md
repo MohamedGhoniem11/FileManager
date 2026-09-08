@@ -15,48 +15,48 @@ Upgrade FileManager WITHOUT rewriting its working skeleton (services/core/gui la
 | Agent | War Room origin | File-domain job | Inputs | Output |
 |---|---|---|---|---|
 | **Commander** | Incident Commander (orchestrates verdicts) | Orchestrates classification verdicts; owns confidence gates; writes journal | All agent outputs | Verdict: move / hold / ask-human |
-| **Analyzer** | Logs agent (evidence gathering) | Reads file internals: PDF text, image EXIF/OCR, code structure, archive manifest | file path + content | `ContentProfile` (typed, Pydantic) |
+| **Analyzer** | Logs agent (evidence gathering) | Reads file internals: PDF text, image EXIF presence, code structure, archive manifest | file path + content | `ContentProfile` (typed dataclass) |
 | **Classifier** | Metrics agent (anomaly scoring) | Proposes category + confidence from content profile + history | ContentProfile, filename, priors | Proposal (category, confidence 0-1) |
 | **Dedup Agent** | Runbook agent (pattern matching) | Exact + near-duplicate fingerprints | ContentProfile hashes, similarity | Duplicate clusters + stale copies |
 | **Rules Agent** | Change agent (deploy correlation) | Evaluates user policies vs file facts; flags safe/risky | User policy set + ContentProfile | Matched policies + risk flags |
 | **Corrector** | Deliberation loop (AGREE/CHALLENGE) | Learns from user corrections; adjusts classifier priors | correction events | updated priors |
 
-**Frameworks note:** The War Room used multiple SDKs to prove interop. For a desktop tool, ONE lightweight decision layer (rules+statistics base, optional small LLM) is the call — see [ADR-011](decisions/ADR-011-classification-engine-rules-plus-llm.md).
+**Frameworks note:** The War Room used multiple SDKs to prove interop. For a desktop tool, ONE lightweight decision layer (rules+statistics base) is the call — see [ADR-011](decisions/ADR-011-classification-engine-rules-plus-llm.md).
 
 ---
 
-## 2. The Deliberation Protocol (the "why agents" answer)
+## 2. The Decision Protocol (the "why agents" answer)
 
 Old flow (deterministic, 1 op):
 ```
 extension → move
 ```
 
-New flow (evidence + contention):
+New flow (evidence + gate):
 ```
 file arrives
   → Analyzer extracts ContentProfile
-  → Classifier proposes:            Tax (0.92), Documents (0.05)...
-  → Dedup Agent:                    "hash-equal to Tax/invoice-2024-03.pdf"
-  → Rules Agent:                    "policy 'receipts → Tax' matches (safe)"
-  → Commander deliberation:
-      - all agents weighted (War Room scorer pattern)
-      - agreement → confidence up, disagreement → confidence down
+  → Classifier proposes:            PDFs (0.80), Documents (0.05)...
+  → Rules Agent:                    "policy 'receipts → PDFs' matches (safe)"
+  → Gate decides (auto / ask / hold):
+      - confidence = extension prior + content evidence + priors memory
+      - risk-flagged rules cap confidence at 0.70
       - verdict path:
-          ≥ threshold     → move + journal
-          below threshold → human gate (preview + confirm)
-  → Corrector listens: user correction → priors update next time
+          ≥ 0.80 (auto) → move + journal
+          0.50–0.79 (ask) → index in place, ask the user
+          < 0.50 (hold) → index in place, never auto-act
+  → Corrector: user correction → priors update next time
 ```
 
-### Channels (event bus — [ADR-010](decisions/ADR-010-in-process-event-bus.md))
+### Wiring (direct calls — no event bus)
 
 ```
-file-events ──► Commander ──► analysis-results ──► Analyzer
-                    │              │
-                    ├──► proposals ───► Classifier
-                    ├──► deliberation ─► Dedup, Rules
-                    ├──► verdicts ─────► Journal, GUI
-                    └──► corrections ──► Corrector → Classifier priors
+observer._process_file
+  → classifier.classify_with_confidence(file)
+  → rules_agent.evaluate(file, classification)
+  → gate.decide(category, confidence, thresholds, risk_flagged)
+  → auto: organizer.move_file + db_service.upsert_file
+  → ask/hold: db_service.upsert_file (index in place)
 ```
 
 ---
@@ -65,64 +65,56 @@ file-events ──► Commander ──► analysis-results ──► Analyzer
 
 | Signal | Weight |
 |---|---|
-| Analyzer content signals | 0.45 |
-| Classifier proposal | 0.25 |
-| Dedup corroboration | 0.15 |
-| Rules match | 0.10 |
-| Prior history / corrections | 0.05 |
+| Extension prior (known category) | 0.60 |
+| Extension prior (unknown → "Others") | 0.15 |
+| Content evidence: image | +0.25 |
+| Content evidence: receipt (strong keywords) | +0.20 |
+| Content evidence: any readable content | +0.05 |
+| Priors memory (corrections for this filename family) | +0.05 per correction, capped at +0.20 |
 
-Deliberation adjustments (War Room AGREE/CHALLENGE protocol):
-- Dedup agrees with classifier → +0.08
-- Rules flags risk (`risk=high`) → cap at 0.70 max / force human gate
-- Low Analyzer signal (empty/opaque file) → max confidence 0.60 → always asks human
+Adjustments:
+- Risk-flagged rules cap effective confidence at 0.70 and demote auto → ask ([ADR-015](decisions/ADR-015-per-category-confidence-thresholds.md))
+- Confidence is clamped to [0, 1]
 
 Gates (thresholds per category — [ADR-015](decisions/ADR-015-per-category-confidence-thresholds.md)):
 - ≥ 0.80 → auto-move + journal entry
-- 0.50–0.79 → suggest + human confirm (preview)
-- < 0.50 → hold in "needs review", never auto-act
+- 0.50–0.79 → ask: index in place, leave for the user
+- < 0.50 → hold: index in place, never auto-act
 
 ---
 
-## 4. Data Model (Pydantic — same discipline as War Room)
+## 4. Data Model (typed, dependency-free)
 
 ```python
-class ContentProfile(BaseModel):
-    path: Path
-    mime_hint: str
-    extracted_text: str | None        # PDF/doc/code/text
-    metadata: dict[str, Any]          # EXIF, headers, manifest
-    fingerprints: dict[str, str]      # sha256, perceptual, normalized-text
-    confidence_floor: float           # 1.0 on unreadable → forces gate
+@dataclass
+class ContentProfile:                 # analyzer output
+    kind: str                         # pdf|image|code|text|archive|binary|unknown
+    text_sample: str = ""             # extracted text (pdf/code/text)
+    dimensions: tuple | None          # images
+    keywords: list[str]               # top content tokens
+    metadata: dict[str, Any]          # has_exif, headers, manifest
 
-class ClassificationProposal(BaseModel):
+class Classification(NamedTuple):     # classifier output
     category: str
     confidence: float
-    evidence_ids: list[str]           # EVD-* traceability (War Room pattern)
+    subcategory: str | None           # "receipt" | "code" | None
+    signals: dict[str, Any]           # extension, content_kind, keywords, ext_prior, priors
 
-class Verdict(BaseModel):             # commander output
-    path: Path
-    action: Literal["move","hold","ask"]
-    target: Path | None
-    confidence: float
-    reasoning: str
-    journal_id: str | None
-
-class JournalEntry(BaseModel):        # the undo story
-    id: str
-    timestamp: datetime
-    action: str
-    source: Path
-    destination: Path | None
-    verdict: Verdict
-    reversible: bool
+class GateDecision(NamedTuple):       # gate output
+    action: str                       # "auto" | "ask" | "hold"
+    band: str
+    effective_confidence: float
+    reason: str
 ```
+
+The journal is a SQLite table, not an in-memory model: `op_type` (rename/copy_delete/trash), source/dest paths, inode, mtime, size, `reversible`, `status` (pending/committed/reversed), and timestamps — append-only, DB-trigger enforced.
 
 ---
 
 ## 5. The Transaction Journal (safety layer — replaces "no undo")
 
 - **Write-ahead design:** journal entry is committed BEFORE the move; the move is a "pending" entry finalized on success — [ADR-013](decisions/ADR-013-append-only-transaction-journal.md)
-- **Undo = replay journal in reverse** (file-level: `move:dest→src`; delete: only if trash-enabled)
+- **Undo = replay journal in reverse** (file-level: `move:dest→src`; only journaled moves are undoable — deletes are not journaled)
 - **Provenance:** every path change queryable — "where did X go?" (the War Room evidence trail → postmortem pattern)
 - SQLite **WAL mode + single-connection discipline** (fixes audit H2)
 
@@ -130,11 +122,11 @@ class JournalEntry(BaseModel):        # the undo story
 
 ## 6. What FAILS CLOSED (safety invariants)
 
-1. **Unreadable file → confidence floor 0.60 → always human gate** (never auto-move opaque content)
+1. **Unreadable file → no content evidence → confidence stays at the extension prior (0.60 known category, 0.15 unknown) → never auto-moves**
 2. **Risk-flagged rule → capped 0.70 / forced gate** (Rules Agent veto power)
 3. **Never delete what you failed to classify** (kills the "Others → orphan → delete" abuse)
 4. **Journal before action** — crash mid-move = recoverable, not lost
-5. **Dry-run everywhere** — every screen has a "show me first" preview built on the same pipeline
+5. **Dry-run by default** — cleanup and lifecycle runs preview first (`cleanup.dry_run`), and the Maintenance tab shows proposed actions before anything executes
 
 ---
 
@@ -142,8 +134,8 @@ class JournalEntry(BaseModel):        # the undo story
 
 ### Keep
 - services/core/gui layering (it aged well)
-- customtkinter (noted as debt in audit; UI is not this story — [D4 decision](decisions/ADR-003-gui-toolkit-tkinter.md) stands)
-- watchdog observer shell (event source — just wired into channels)
+- customtkinter (noted as debt in audit; UI is not this story — [ADR-003](decisions/ADR-003-gui-toolkit-tkinter.md) stands)
+- watchdog observer shell (event source — wired into the classification pipeline)
 - dry-run-first culture (already good — make it universal)
 
 ### Kill
@@ -165,21 +157,20 @@ The agentic file-organizer space was surveyed before locking this design. Two ho
 ### The gaps nobody fills (our honest moat)
 | Gap in the landscape | Who has it | What we build instead |
 |---|---|---|
-| Multi-agent deliberation | **None** (everyone uses one model or a tiered pipeline) | Analyzer/Classifier/Dedup/Rules debate; Commander arbitrates |
-| Confidence-gated escalation | sift-ai only (0★, threshold only) | Per-agent disagreement → council vote → escalate only contested files |
-| Correction-driven learning | One unverified 0★ project (pickle-based) | Persistent correction ledger → policy/prior updates, tested |
-| Structured decision journal | Nobody (TheYellowDuck has move-only log) | Verdicts with agent reasoning, queryable, undoable |
+| Multi-agent deliberation | **None** (everyone uses one model or a tiered pipeline) | Analyzer → Classifier → Rules → Gate pipeline with explainable confidence signals |
+| Confidence-gated escalation | sift-ai only (0★, threshold only) | Auto/ask/hold bands escalate uncertain files to the human |
+| Correction-driven learning | One unverified 0★ project (pickle-based) | Persistent priors that update from corrections, tested |
+| Structured decision journal | Nobody (TheYellowDuck has move-only log) | Journaled moves with confidence scores, queryable, undoable |
 
 ### Calibration is the non-negotiable (validated against production systems)
 Production confidence gates exist for exactly this shape of problem: **Microsoft SCL** (multi-tier spam thresholds: 5-6 vs 9), **Salesforce Data 360 auto tagging** ("approve tags at threshold, rest to manual review"), **AWS AgentCore** claims routing (auto-approve vs HUMAN_REVIEW, fail-safe default), **NVIDIA**'s 4-band router. The deliberate protocol follows the **uncertainty-sampling** pattern from active learning (Munro, *HITL Machine Learning*, ch. 3).
 
-The one lesson all of them converge on: **a raw confidence score is not a probability.** Modern classifiers are systematically overconfident (Guo et al., ICML 2017), so:
-- Measure **Expected Calibration Error (ECE)** on a held-out set; apply temperature scaling / isotonic regression
-- Re-derive thresholds from **calibrated** scores, not raw ones
-- Keep **deterministic overrides** (critical file classes never auto-move regardless of score — mirroring AWS's fail-safe routing)
-- Use **asymmetric thresholds**: conservative auto-move band, wide ask-human band (wrong move ≈ irreversible cost)
+The one lesson all of them converge on: **a raw confidence score is not a probability.** Modern classifiers are systematically overconfident (Guo et al., ICML 2017). The implemented response:
+- **Asymmetric thresholds**: conservative auto-move band (≥ 0.80), wide ask-human band (0.50–0.79) — wrong move ≈ irreversible cost
+- **Risk cap**: risk-flagged rules cap effective confidence at 0.70 and can never auto-fire
+- **Per-category overrides**: categories can tighten their own auto/ask thresholds
 
-This is now encoded in [ADR-015](decisions/ADR-015-per-category-confidence-thresholds.md).
+This is encoded in [ADR-015](decisions/ADR-015-per-category-confidence-thresholds.md).
 
 ---
 
@@ -187,6 +178,6 @@ This is now encoded in [ADR-015](decisions/ADR-015-per-category-confidence-thres
 
 The append-only journal ([ADR-013](decisions/ADR-013-append-only-transaction-journal.md)) goes **beyond** production desktop file managers — which is correct for a batch organizer:
 - Dolphin (`KIO::FileUndoManager`) and Nautilus both keep undo **in-memory only**; a crash loses everything. Our journal survives restart.
-- `send2trash` establishes the "never hard-delete" primitive — our Journal should delegate deletes to OS trash.
+- Deletes are **not** journaled: `delete_file` removes directly, so undo covers moves only ([ADR-016](decisions/ADR-016-safe-journal-backed-undo.md)).
 - Known pitfall (Zed, tine bugs): **undo after external modification loses data.** Journal must record per-file `mtime + size` at op time and **validate state before replaying undo**.
-- Cross-device (`EXDEV`) and hardlink identities also break naive replay — journal tracks operation type + inode, and marks non-atomic moves as `copy+delete` (undo = re-copy).
+- Cross-device (`EXDEV`) and hardlink identities also break naive replay — the journal records operation type + inode; every entry today is `rename`, so undo renames back (copy+delete and trash inverses are not implemented).

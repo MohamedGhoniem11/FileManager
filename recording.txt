@@ -31,7 +31,7 @@ git checkout 66402aa
 
 ## Video 3 — "The Agentic Upgrade" (~8 min) — THE MONEY SHOT
 
-- **Checkout:** `rec/video-3-money` (HEAD — Steps 4-9 complete)
+- **Checkout:** `rec/video-3-money` (commit f879e1a, Steps 4-9 complete)
 - Exact command sequence, in this order, from repo root:
 
 ```
@@ -43,7 +43,8 @@ git checkout rec/video-3-money
 
 - Driver prints each beat with real values: analyzer reads INSIDE the PDF →
   category+confidence+subcategory → gate verdict → journaled move →
-  low-confidence file asks/holds → human correction → similar file lands right.
+  low-confidence file asks → opaque file holds → human correction →
+  similar file asks again (priors lift it to 0.75, still below 0.80).
 - Optional safety-groundwork variant (journal append-only trigger, undo,
   provenance): `.venv/bin/python demo/record_video3_safety.py`
 
@@ -53,8 +54,8 @@ git checkout rec/video-3-money
 
 - **Checkout:** anywhere on `main` at HEAD.
 - Commands on screen:
-  - `git log --oneline` → the journey: audit → fix CI → journal → agents → tests (41 commits)
-  - `.venv/bin/python -m pytest -q` → 176 green
+  - `git log --oneline` → the journey: audit → fix CI → journal → agents → tests (46 commits)
+  - `.venv/bin/python -m pytest -q` → 228 green
 - Show before/after table (docs/01-audit.md) + Q&A cheat-sheet.
 
 ```
@@ -74,7 +75,7 @@ git checkout main
 | `step-7-lifecycle` | policies + multi-location | outtake |
 | `step-8-crossplatform` | CI matrix | outtake |
 | `step-9-audit2` | health proposals | Video 3 outtake (propose→confirm) |
-| `rec/video-3-money` | HEAD | Video 3 |
+| `rec/video-3-money` | commit f879e1a | Video 3 |
 | `rec/video-3-safety` | Steps 1-3 | Video 3 safety variant |
 
 ## Reset between takes (ALWAYS)

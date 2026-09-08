@@ -11,7 +11,7 @@ Maintain a **strict append-only journal** in SQLite:
 - Every mutation (move/rename/delete/copy) writes a journal entry **before** the action executes; the entry is marked `pending → committed → reversed`.
 - Journal schema is versioned (schema_version table) with a migration path (fixing the missing config-schema pattern generally — H4/F9).
 - SQLite opened in **WAL mode with single-connection discipline** (fixing H2).
-- Undo = reverse replay of committed entries in FIFO order; reversible flag per action type.
+- Undo = reverse replay of committed entries in LIFO order (newest first); reversible flag per action type.
 
 ## Alternatives Considered
 - **In-memory undo stack**:
@@ -33,7 +33,15 @@ SQLite gives atomicity (journal-before-action is crash-safe), WAL gives concurre
 
 ## Update (2026-09-07): Validation against real undo systems
 Research verified the design and added three hardening rules:
-1. **Pre-undo state validation** — record per-file `mtime + size` at journal time; before replaying an inverse op, verify the target still matches. Undo-after-external-change is a documented data-loss path (Zed #48697, tine #305); silent overwrite is unacceptable.
-2. **Never hard-delete — delegate to OS trash** — use `send2trash` (or equivalent) for deletes so the journal's inverse is "restore from trash", not "recreate from nothing".
-3. **Track operation type + inode** — cross-device `EXDEV` moves fall back to copy+delete (non-atomic); hardlinks share inodes. Naive reverse replay breaks on both. Journal stores `op_type` (rename/copy+delete/trash) and records inode, so undo re-copies instead of renames when needed.
-   Production file managers (Dolphin KIO::FileUndoManager, Nautilus) keep undo **in-memory only** — our persisted journal is deliberately stronger, which is the right call for unattended batch operations (with checkpoint compaction to bound growth, per oplog-undo's `compact()` pattern).
+1. **Pre-undo state validation** — record per-file `mtime + size` at journal time; before replaying an inverse op, verify the target still matches. Undo-after-external-change is a documented data-loss path (Zed #48697, tine #305); silent overwrite is unacceptable. **Adopted** — see the implementation record below.
+2. **Never hard-delete — delegate to OS trash** — use `send2trash` (or equivalent) for deletes so the journal's inverse is "restore from trash", not "recreate from nothing". **Not adopted** — deletes are not journaled and use `os.remove`; this rule remains future work.
+3. **Track operation type + inode** — cross-device `EXDEV` moves fall back to copy+delete (non-atomic); hardlinks share inodes. Naive reverse replay breaks on both. Journal stores `op_type` (rename/copy+delete/trash) and records inode, so undo re-copies instead of renames when needed. **Partially adopted** — inode is recorded and the schema allows all three op types, but moves always write `rename` (`shutil.move` handles EXDEV internally); no copy+delete marking exists.
+   Production file managers (Dolphin KIO::FileUndoManager, Nautilus) keep undo **in-memory only** — our persisted journal is deliberately stronger, which is the right call for unattended batch operations. Checkpoint compaction (per oplog-undo's `compact()` pattern) was **not implemented** — the journal grows unbounded for now.
+
+## Update (2026-09-09): Implementation record
+The journal is live in `src/services/db_service.py`: an append-only `journal`
+table (DB triggers forbid DELETE and immutable-field UPDATEs) with statuses
+`pending → committed → reversed`, written **before** every move executes
+(`organizer.move_file` → `journal_record` → `shutil.move` →
+`journal_mark_committed`). Undo is **LIFO**, not FIFO: `organizer.undo_last`
+reverse-replays the newest committed reversible renames first (ADR-016).

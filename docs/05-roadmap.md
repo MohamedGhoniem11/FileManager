@@ -54,7 +54,7 @@
 | # | Work | Fixes | Verification |
 |---|---|---|---|
 | 5.1 | Near-duplicate fingerprints (perceptual + normalized-text) | M5 | renamed/re-saved copies cluster correctly |
-| 5.2 | Corrector loop: priors update from user drags | M3 | correction → next similar file lands right |
+| 5.2 | Corrector loop: priors update from user drags | M3 | correction → next similar file's confidence rises (0.65 → 0.75, still asks) |
 
 **Gate:** duplicate clusters show "N files ≈ 3 real versions"; correction learning is tested.
 
@@ -66,7 +66,7 @@
 | 6.2 | Rules Agent (visual + NL rules, dry-run preview) | M4 | rule-match tests + dry-run no-op test |
 | 6.3 | Risk-flagged rules cap confidence / force gate | (safety) | risk-rule never auto-moves |
 
-**Gate:** below-threshold files always ask; risky rules never auto-fire.
+**Gate:** files below the auto threshold never auto-move (ask 0.50 to 0.79, hold below 0.50); risky rules never auto-fire.
 
 ## Step 7 — Lifecycle + multi-location ✅ Done
 
@@ -87,7 +87,7 @@
 | # | Work | Fixes | Verification |
 |---|---|---|---|
 | 9.1 | Health findings explain + propose safe undoable actions | M3 | no delete suggestion without explicit ask |
-| 9.2 | Universal proposed-change confirmation | (B10) | every mutation shows preview first |
+| 9.2 | Universal proposed-change confirmation | (B10) | propose→confirm: cleanup actions preview first; only irrevocable/confirm-actions gated |
 
 ---
 

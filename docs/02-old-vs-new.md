@@ -1,7 +1,7 @@
 # 02 — Agentic FileManager: The Transformation Pitch
 
 **Before:** a file sorter that guesses by extension.
-**After:** a system that examines, deliberates, and asks before it acts.
+**After:** a system that examines, scores, and asks before it acts.
 
 ---
 
@@ -44,7 +44,7 @@ Full evidence: [01-audit.md](01-audit.md)
 
 ## 3. The New System — "The File Council"
 
-Instead of one dumb mapping table, file handling becomes a **deliberation**:
+Instead of one dumb mapping table, file handling becomes a **scored decision**:
 
 ```
                      ┌──────────────────────┐
@@ -66,12 +66,12 @@ Instead of one dumb mapping table, file handling becomes a **deliberation**:
 
 | Agent | Reads | Decides | Example outcome |
 |---|---|---|---|
-| **Analyzer** | PDF text, image EXIF/OCR, code structure, archive manifest | What IS this file, not what does its suffix say | "This isn't a PDF — it's a tax receipt (sender: bank)" |
-| **Classifier** | Analyzer output + filename + history | Category with confidence score | "Tax — 92% confidence" |
+| **Analyzer** | PDF text, image EXIF presence, code structure, archive manifest | What IS this file, not what does its suffix say | "This isn't just a PDF — the text says 'invoice' and 'total', so it's a receipt" |
+| **Classifier** | Analyzer output + filename + history | Category with confidence score | "PDFs — 80% confidence" |
 | **Dedup Agent** | Content fingerprints (not just SHA-256) | Near-duplicates: same doc re-saved, renamed, converted | "These 11 'final_v2' files are 3 real versions" |
 | **Rules Agent** | User policies + file facts | Which rule fires, and is it safe? | "Videos > 1GB → External drive (requires confirmation)" |
-| **Commander** | All agent outputs | The verdict: move / hold / ask human | "94% sure → auto-move, journaled. 58% → ask you first." |
-| **Corrector** | Your corrections | Updates the classifier's priors | You drag a receipt to "Tax" → it never guesses "PDFs" again |
+| **Commander** | All agent outputs | The verdict: move / hold / ask human | "80% sure → auto-move, journaled. 65% → ask you first." |
+| **Corrector** | Your corrections | Updates the classifier's priors | You correct a mis-sorted file → the priors lift the next similar file's confidence |
 
 ---
 
@@ -82,14 +82,14 @@ Instead of one dumb mapping table, file handling becomes a **deliberation**:
 | Classification input | file extension | file **content** + context + history |
 | Classification output | one bucket | **category + confidence score** |
 | Model | 700MB spaCy, never used | lightweight, used for real decisions |
-| On disagreement | — (impossible) | agents **deliberate**; commander arbitrates |
+| On disagreement | — (impossible) | the **confidence gate** arbitrates (auto/ask/hold) |
 | On uncertainty | silent mis-sort | **asks the human** (HITL gate) |
 | On mistakes | permanent, invisible | **undo journal**, every move traceable |
 | Duplicates | exact hash only | exact + **near-duplicate** fingerprints |
-| Old files | accumulate forever | **lifecycle policies** (archive, threshold alerts) |
+| Old files | accumulate forever | **lifecycle policies** (age/size/category archive rules) |
 | After user correction | nothing | **learns** for the future |
 | Platforms | Windows only | **cross-platform** |
-| Tests | broken suite | green, high coverage, TDD'd |
+| Tests | broken suite | green, 68% coverage, TDD'd |
 
 ---
 
@@ -101,7 +101,7 @@ Every agentic muscle came from the hackathon project — that's the portfolio br
 |---|---|
 | Incident Commander (LangGraph) | File Commander orchestrating verdicts |
 | Metrics/Logs/Change/Runbook agents | Analyzer / Classifier / Dedup / Rules agents |
-| AGREE/CHALLENGE deliberation protocol | Agent disagreement before final classification |
+| AGREE/CHALLENGE deliberation protocol | Confidence scoring + gate before final classification |
 | `scorer.py` weighted confidence + gating | Confidence gate: auto-move vs ask-human |
 | HITL remediation engine | Confirm-before-risky-move + undo journal |
 | Evidence trail → Git-Ops postmortem | Transaction journal for every movement |
@@ -126,4 +126,4 @@ Every agentic muscle came from the hackathon project — that's the portfolio br
 | Undo | none | full journal |
 | Data-loss risk | silent overwrites possible | gated + journaled |
 | Platform | Windows | cross-platform |
-| Learning | none | correct-once-remembers-forever |
+| Learning | none | priors update from corrections |

@@ -1,7 +1,7 @@
 # ADR-004: SQLite for Metadata Indexing
 
 ## Status
-Proposed (Next Phase)
+Accepted
 
 ## Context
 As the file count grows and we move toward NLP-based search, querying the filesystem directly becomes too slow. We need a way to store file metadata for instant retrieval.
@@ -23,3 +23,10 @@ SQLite is built into Python, requires zero server setup, and provides high-perfo
 ## Consequences
 - **Benefits**: Zero dependencies, relational queries, transaction safety, high performance.
 - **Limitations**: Requires managing a local database file; schemas must be maintained.
+
+## Update (2026-09-09): Implemented
+SQLite metadata indexing shipped in `src/services/db_service.py`: a single
+WAL-mode connection (`PRAGMA journal_mode=WAL`, busy timeout), a `files`
+table with `upsert_file` / `query_files`, plus the append-only `journal` and
+`fingerprints` tables. ADR-008 is the implementation record for the same
+decision; this ADR is the earlier proposal that was accepted and built.

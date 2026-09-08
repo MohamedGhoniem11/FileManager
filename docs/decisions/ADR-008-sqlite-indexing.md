@@ -23,3 +23,11 @@ SQLite is built-in to Python, serverless, and extremely efficient at querying re
 ## Consequences
 - **Benefits**: Near-instant search responses, decoupled from actual disk I/O.
 - **Limitations**: Database and disk can occasionally drift if manual changes happen while the app is off; mitigated by 'Initial Sync'.
+
+## Update (2026-09-09): Implementation record
+This is the implementation record for SQLite indexing (ADR-004 is the
+earlier proposal for the same decision). Live in `src/services/db_service.py`:
+WAL mode, a `files` table with `upsert_file` (INSERT OR REPLACE) and
+`query_files` (filename/extension/category/size/date filters), plus the
+append-only `journal` and `fingerprints` tables. Initial Sync populates the
+index from the watched locations.

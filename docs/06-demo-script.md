@@ -2,7 +2,7 @@
 
 > A recording walkthrough that tells the "old → diagnosis → upgrade" story in ~20 minutes, with every claim shown on screen.
 >
-> **Recording status (Steps 4–9 landed, 176 tests green):** all four videos are recordable **now**. Video 3's File Council segment (confidence scoring, human gate, learning) is fully built — `demo/record_video3_money.py` drives the money shot, `demo/record_video3_safety.py` drives the Steps 1–3 safety groundwork variant. Jump points + per-video commands: **`recording.txt`** at the repo root; tags `rec/video-3-money` (HEAD) and `rec/video-3-safety` (Steps 1–3) pin the two states. Every claim must be on screen; nothing here may be staged.
+> **Recording status (Steps 4–9 landed, 228 tests green):** all four videos are recordable **now**. Video 3's File Council segment (confidence scoring, human gate, learning) is fully built — `demo/record_video3_money.py` drives the money shot, `demo/record_video3_safety.py` drives the Steps 1–3 safety groundwork variant. Jump points + per-video commands: **`recording.txt`** at the repo root; tags `rec/video-3-money` (commit f879e1a) and `rec/video-3-safety` (Steps 1–3) pin the two states. Every claim must be on screen; nothing here may be staged.
 
 ---
 
@@ -54,23 +54,26 @@
 
 ## Video 3 — "The Agentic Upgrade" (~8 min) — THE MONEY SHOT
 
-> **Recordable now (Steps 4–9 landed, 176 tests green).** Two driver scripts
+> **Recordable now (Steps 4–9 landed, 228 tests green).** Two driver scripts
 > in `demo/` print every beat with real state, so the on-screen evidence is
 > always genuine:
 > - **Money shot (File Council):** `demo/record_video3_money.py` — reset →
 >   samples → drop receipt → journal row → confidence + gate → low-confidence
->   file asks → opaque holds → correct once → similar file lands right.
+>   file asks → opaque holds → correct once → similar file asks again (priors
+>   lift it to 0.75, still below the 0.80 auto line).
 > - **Safety groundwork (Steps 1–3):** `demo/record_video3_safety.py` —
 >   journaled move, `DELETE FROM journal` refused by the DB trigger,
 >   inode-guarded `undo_last(1)`, `journal_provenance` answers "where did it go?"
 >
 > Both clear `demo/scratch-watch/` and re-reset app state per take, so they
 > never touch the real Downloads. Jump points live in `recording.txt`:
-> `rec/video-3-money` (HEAD), `rec/video-3-safety` (Steps 1–3 state).
+> `rec/video-3-money` (commit f879e1a), `rec/video-3-safety` (Steps 1–3 state).
 >
 > The File Council sequence below (0:00–7:00) maps 1:1 onto the money-shot
-> driver's beats (analyzer → classifier `0.80` auto → journaled move → undo →
-> low-confidence ask → correct once → priors lift the next similar file):
+> driver's beats (analyzer → classifier `0.80` auto → journaled move →
+> low-confidence ask → opaque hold → correct once → similar file asks again
+> at `0.75`). Undo is NOT in this driver; it lives in the safety variant
+> (`record_video3_safety.py`, Beat 4).
 
 **Goal:** the File Council demo. This is the "look how cool" reel.
 
@@ -78,15 +81,15 @@
 |---|---|---|
 | 0:00 | Open architecture: Commander + 5 agents diagram | "Instead of extension→folder, files now go through a deliberation. Let me show you." |
 | 0:30 | Put a fake `invoice_amazon_march.pdf` in the watch folder | "Watch what happens with a file that's *obviously* a receipt, not just 'a PDF'." |
-| 1:00 | Watch Analyzer extract text → Classifier proposes "Tax, 0.92" | "The Analyzer reads inside — PDF text, image metadata. The Classifier proposes with a *confidence score*, not a bucket." |
-| 1:40 | Show Dedup + Rules corroborating, confidence rises | "Agreement raises the score — the same AGREE protocol from the War Room." |
-| 2:20 | File moves to Tax/, journal row appears | "Above 0.80 it moves and journals itself. One click = undo. Let's prove it." |
-| 2:50 | Click UNDO → file returns → journal shows `reversed` | "Every move is a transaction. This is the part the old system simply didn't have." |
-| 3:40 | Feed a low-confidence file (e.g., an unclear month invoice) | "Now watch a hard one — the Analyzer struggles, so the score is 0.58. Below threshold." |
-| 4:20 | Human gate pops: "Move to Tax? (58%)" → confirm | "It *asks* instead of guessing. This is the HITL gate from my remediation engine." |
-| 5:00 | Drag the mis-classified file to the right folder | "And the part I'm proudest of: it learns. I correct it once —" |
-| 5:30 | Feed a *similar* file; it lands correctly now | "— and the priors update. Misses become lessons, not deletes." |
-| 6:00 | Show test suite green + coverage % | "And it's tested: green suite, TDD'd. Confidence scoring is unit-tested, the gates are tested, the journal is tested." |
+| 1:00 | Watch Analyzer extract text → Classifier proposes `category='PDFs' confidence=0.8 subcategory='receipt'` | "The Analyzer reads inside — PDF text, image metadata. The Classifier proposes with a *confidence score*, not a bucket." |
+| 1:40 | Show the signals behind the score: `ext_prior=0.6` + matched keywords | "The score is explainable: extension prior plus the receipt keywords it matched inside the PDF." |
+| 2:20 | File moves to PDFs/, journal row appears | "Above 0.80 it moves and journals itself. Every move is a transaction." |
+| 3:00 | Feed a low-confidence file (generic meeting notes, no receipt keywords) | "Now watch a hard one: the Analyzer finds no receipt keywords, so the score is 0.65. Below the 0.80 auto line." |
+| 3:40 | Gate verdict: `gate: ask (effective 0.65, band ask)`, file stays in watch | "It *asks* instead of guessing. This is the HITL gate from my remediation engine." |
+| 4:20 | Feed an opaque unknown file → `gate: hold (effective 0.2, band hold)` | "Unknown content? It holds. It never guesses destructively." |
+| 5:00 | Correct the low-confidence file once, priors update | "And the part I'm proudest of: it learns. I correct it once..." |
+| 5:30 | Feed a *similar* file; it asks again at 0.75 | "The priors remember, but honestly: 0.75 is still below the 0.80 auto line, so it asks again. Misses become lessons, not deletes." |
+| 6:00 | Show test suite green (228 passing) + coverage % | "And it's tested: green suite, TDD'd. Confidence scoring is unit-tested, the gates are tested, the journal is tested." |
 | 7:00 | Wrap | "Same codebase I showed you in Video 2 — agentic judgment layer on top, safety layer underneath. Not a rewrite." |
 
 **Skill tags:** multi-agent orchestration, confidence scoring, HITL, transaction/journal design, self-learning, TDD.

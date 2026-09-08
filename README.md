@@ -93,7 +93,7 @@ graph TD
 
 - **File Monitoring**: `watchdog` for real-time filesystem events (multi-location)
 - **Query Parsing**: deterministic rule engine — no heavyweight ML model ([ADR-011](docs/decisions/ADR-011-classification-engine-rules-plus-llm.md))
-- **Data Persistence**: `SQLite` (WAL) for metadata, query history, and the append-only transaction journal
+- **Data Persistence**: `SQLite` (WAL) for metadata and the append-only transaction journal
 - **UI Framework**: `customtkinter` for modern dark-mode interface
 - **File Integrity**: SHA-256 + content fingerprints for duplicate and near-duplicate detection
 
@@ -105,7 +105,7 @@ graph TD
 
 **Problem**: Browser downloads create temporary files (`.crdownload`) that are locked during the download process. Attempting to move these files immediately caused crashes.
 
-**Solution**: `observer.py` gates every move behind a real readiness check: temporary suffixes (`.crdownload`, `.part`, `.tmp`, ...) are skipped outright, files that fail to open (locked by another process) are retried, and a file is only moved once its size is stable across two samples — no fixed-sleep guesswork.
+**Solution**: `observer.py` gates every move behind a real readiness check: temporary suffixes (`.crdownload`, `.part`, `.tmp`, ...) are never moved — the check retries them until they clear or gives up, files that fail to open (locked by another process) are retried, and a file is only moved once its size is stable across two samples — no fixed-sleep guesswork.
 
 ```python
 # Simplified example
@@ -211,9 +211,9 @@ build_exe.bat
 ## 🧪 Key Features
 
 - **Real-time Monitoring** - Instant file detection and sorting via `watchdog`, multi-location with per-location rule scoping
-- **Content Intelligence** - The Analyzer extracts PDF text, EXIF metadata, code heads, and archive manifests; the Classifier proposes with confidence scores, not blind buckets
-- **Human-in-the-Loop Gate** - Below-threshold files always **ask** (never auto-move); risky rules cap confidence so they can never auto-fire
-- **Self-Learning Priors** - Correct a misclassification once and the priors update; the next similar file lands right
+- **Content Intelligence** - The Analyzer extracts PDF text, code heads, and archive manifests, and detects EXIF presence in images; the Classifier proposes with confidence scores, not blind buckets
+- **Human-in-the-Loop Gate** - Files below the auto threshold never auto-move — they **ask** (0.50–0.79) or **hold** (< 0.50); risky rules cap confidence so they can never auto-fire
+- **Self-Learning Priors** - Correct a misclassification once and the priors update; the next similar file scores higher
 - **Natural Language Interface** - Query files with commands like "Find my PDFs" or "Cleanup downloads" (deterministic rule engine — no heavy model)
 - **Smart Dedup** - SHA-256 exact duplicates + perceptual/text fingerprints for near-duplicate clustering
 - **Safe Operations** - Every move is journaled append-only (DB-trigger enforced); journal-backed undo and provenance ("where did X go?")
@@ -221,7 +221,7 @@ build_exe.bat
 - **Dry-Run Mode** - Preview rules and cleanup before anything executes
 - **Lifecycle Policies** - Age/size-based archive policies with scheduled runs
 - **Auto-Startup Integration** - Set-and-forget operation with Windows startup
-- **Activity Logging** - Real-time dashboard with operation history
+- **Activity Logging** - Real-time log viewer (colorized by level)
 
 ---
 
