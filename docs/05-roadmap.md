@@ -30,14 +30,14 @@
 
 **Gate:** no silent failure paths remain; every move is journaled.
 
-## Step 3 — The undo story
+## Step 3 — The undo story ✅ Done
 
 | # | Work | Fixes | Verification |
 |---|---|---|---|
-| 3.1 | Journal-backed undo: reverse replay, batched undo | H3 | undo 10 moves, assert FS matches original |
-| 3.2 | Provenance queries ("where did X go?") | H3 | journal query test |
+| 3.1 | Journal-backed undo: reverse replay, batched undo | H3 | [undo tests](../tests/test_undo.py): LIFO replay, batched undo, writes count of reversed entries |
+| 3.2 | Provenance queries ("where did X go?") | H3 | [journal_provenance tests](../tests/test_undo.py): source/dest lookup, id-ordered, empty for unknown paths |
 
-**Gate:** undo is unit-tested + demoable in the GUI.
+**Gate:** undo is unit-tested ([ADR-016](decisions/ADR-016-safe-journal-backed-undo.md)) and demoable via `Organizer.undo_last()` — GUI wiring rides on later GUI steps.
 
 ## Step 4 — The intelligence story (Analyzer + content classification)
 

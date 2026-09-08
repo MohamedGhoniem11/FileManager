@@ -21,7 +21,7 @@ ACT 3: The Upgrade   FileManager + agent patterns = "Agentic FileManager" (File 
 | [04-ease-of-life.md](04-ease-of-life.md) | Feature list | What's added and why it matters to a real user |
 | [05-roadmap.md](05-roadmap.md) | Phased implementation plan | Testable milestones, one demonstrable idea per commit |
 | [06-demo-script.md](06-demo-script.md) | Screen recording guide | The ~20 min interview demo, engineered shot-by-shot |
-| [decisions/](decisions/) | ADR-001..009 (existing) + ADR-010..015 (new) | The engineering decisions, none made by vibes |
+| [decisions/](decisions/) | ADR-001..009 (existing) + ADR-010..016 (new) | The engineering decisions, none made by vibes |
 
 ## Two Repos, One Story
 

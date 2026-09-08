@@ -5,10 +5,14 @@ File System Organizer
 ---------------------
 Responsible for the physical movement, renaming, and management of files.
 Also handles collision resolution strategies and directory creation.
+
+H3 (roadmap 3.1): journal-backed undo. Every move is journaled BEFORE it
+executes (ADR-013); undo_last() reverse-replays the newest committed moves
+(ADR-016).
 """
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Dict, List, Optional
 from src.utils.path_utils import sanitize_filename
 from src.services.logger import logger
 from src.services.config_service import config_service
@@ -72,6 +76,71 @@ class Organizer:
         if entry_id is not None:
             db_service.journal_mark_reversed(entry_id)
         return None
+
+    def undo_last(self, count: int = 1) -> int:
+        """
+        Reverse-replays the newest committed moves (ADR-016, roadmap 3.1).
+
+        LIFO order: the most recent move is undone first. Only entries that
+        are committed, reversible, op_type='rename', whose dest still exists,
+        whose source is free, and whose inode matches the journal are reversed.
+        Every successful undo marks the entry 'reversed'.
+        Returns the number of moves successfully undone.
+        """
+        if count < 1:
+            return 0
+
+        candidates = [
+            e for e in db_service.journal_query(status="committed")
+            if e["reversible"] == 1 and e["op_type"] == "rename"
+        ][-count:]  # newest committed reversible renames
+
+        undone = 0
+        for entry in reversed(candidates):
+            if self._try_reverse(entry):
+                db_service.journal_mark_reversed(entry["id"])
+                undone += 1
+        return undone
+
+    def _try_reverse(self, entry: Dict) -> bool:
+        """Tries to inverse one journaled move; safe only when all checks pass."""
+        source = Path(entry["source_path"])
+        dest = Path(entry["dest_path"])
+
+        if not dest.exists():
+            logger.warning(
+                f"Undo skipped: dest {dest} no longer exists "
+                f"(entry {entry['id']})."
+            )
+            return False
+        if source.exists():
+            logger.warning(
+                f"Undo skipped: source {source} is occupied "
+                f"(entry {entry['id']}). Refusing to clobber."
+            )
+            return False
+        try:
+            stats = dest.stat()
+        except OSError as e:
+            logger.error(f"Undo failed: cannot stat {dest}: {e}")
+            return False
+        if entry["inode"] is not None and stats.st_ino != entry["inode"]:
+            logger.warning(
+                f"Undo skipped: dest {dest} is a different file than journaled "
+                f"(entry {entry['id']})."
+            )
+            return False
+
+        try:
+            shutil.move(str(dest), str(source))
+            logger.info(
+                f"Undo: restored {source.name} from "
+                f"{dest.parent.name}/{dest.name}"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Undo failed to move {dest} -> {source}: {e}")
+            return False
 
     def delete_file(self, file_path: Path):
         """Safely deletes a file if it exists."""

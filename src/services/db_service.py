@@ -313,5 +313,24 @@ class DbService:
             row = conn.execute("SELECT MAX(version) FROM journal_schema_version").fetchone()
             return row[0]
 
+    def journal_provenance(self, path: str) -> List[Dict]:
+        """
+        "Where did X go?" (roadmap 3.2 / ADR-016).
+
+        Returns every journal entry that ever touched `path` as a source or
+        a destination, oldest first. Empty list when the path is unknown.
+        """
+        with self._lock:
+            conn = self.get_connection()
+            rows = conn.execute(
+                """
+                SELECT * FROM journal
+                WHERE source_path = ? OR dest_path = ?
+                ORDER BY id
+                """,
+                (path, path),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
 
 db_service = DbService()

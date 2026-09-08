@@ -81,7 +81,7 @@ The old FileManager is an ambitious beginner-to-intermediate project with a genu
 
 - **File:** whole app — `organizer.py`, `observer.py` move paths.
 - **Impact:** one wrong rule = files scattered permanently. No reversible operation, no journal, no provenance ("where did X go?").
-- **Fixed (Step 2, groundwork):** append-only versioned journal schema + write-before-action journaling in `organizer.move_file` ([ADR-013](decisions/ADR-013-append-only-transaction-journal.md)). Undo replay itself is Step 3.
+- **Fixed (Steps 2–3):** append-only versioned journal schema + write-before-action journaling in `organizer.move_file` ([ADR-013](decisions/ADR-013-append-only-transaction-journal.md)); safe reverse replay `Organizer.undo_last()` + provenance `journal_provenance()` ([ADR-016](decisions/ADR-016-safe-journal-backed-undo.md), [undo tests](../tests/test_undo.py)).
 
 ### H4. Relative config/log paths
 

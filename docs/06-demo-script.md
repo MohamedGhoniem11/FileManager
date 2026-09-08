@@ -2,7 +2,7 @@
 
 > A recording walkthrough that tells the "old → diagnosis → upgrade" story in ~20 minutes, with every claim shown on screen.
 >
-> **Recording status (as of Step 2):** Videos 1, 2 and 4 are recordable **now**. Video 3's File Council segment (confidence scoring, human gate, learning) describes roadmap **Steps 3–6, which are not built yet** — record the "Safety Layer groundwork" variant below today (it shows what exists), and re-record Video 3 once Step 6 lands. Every claim must be on screen; nothing here may be staged.
+> **Recording status (as of Step 3):** Videos 1, 2 and 4 are recordable **now**. Video 3's File Council segment (confidence scoring, human gate, learning) describes roadmap **Steps 4–6, which are not built yet** — record the "Safety Layer groundwork" variant below today (it shows what exists, including real journal-backed undo from Step 3), and re-record Video 3 once Step 6 lands. Every claim must be on screen; nothing here may be staged.
 
 ---
 
@@ -54,15 +54,15 @@
 
 ## Video 3 — "The Agentic Upgrade" (~8 min) — THE MONEY SHOT
 
-> **⏳ Recordable TODAY (Steps 1–2 only):** replace the File Council beats below with the **"safety layer groundwork"** variant:
+> **⏳ Recordable TODAY (Steps 1–3):** replace the File Council beats below with the **"safety layer groundwork"** variant:
 > 1. Run `python demo/reset_state.py` first — fresh config + DB + journal for the take.
 > 2. `python demo/make_samples.py` → `demo/scratch-downloads/` with the receipt PDF + near-dup images + opaque file.
 > 3. Point the app at that scratch folder, drop `invoice_amazon_march.pdf` in it, watch it classify and move.
 > 4. `sqlite3 ~/.local/share/FileManager/metadata.db "SELECT * FROM journal;"` — show the committed row (op_type, source, dest). That's write-before-action journaling in action.
 > 5. Try `DELETE FROM journal;` — show the DB-level trigger refusing it (append-only enforced by the database itself).
-> 6. Show `docs/05-roadmap.md` Step 3: undo replay is the next milestone — this is its foundation.
+> 6. **Undo it live** — call `Organizer.undo_last(1)` (via a REPL or tiny script) and show the file return to its source while the journal row flips to `reversed`. Then `journal_provenance(path)` answers "where did X go?" — this is H3 closed, and it's the [ADR-016](decisions/ADR-016-safe-journal-backed-undo.md) story.
 >
-> The full File Council sequence below (0:00–7:00) is **recordable only after Steps 3–6**:
+> The full File Council sequence below (0:00–7:00) is **recordable only after Steps 4–6** (confidence scoring, human gate, learning):
 
 **Goal:** the File Council demo. This is the "look how cool" reel.
 
