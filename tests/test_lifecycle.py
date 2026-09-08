@@ -128,3 +128,71 @@ def test_run_policies_reads_config_when_policies_none(tmp_path):
     actions = run_policies([file], policies=None, dry_run=True)
     assert len(actions) == 1
     assert actions[0].policy_name == "archive-old"
+
+
+def test_run_policies_skips_failed_moves(tmp_path, mocker):
+    """A failed move must not be reported as an executed action."""
+    mock_move = mocker.patch(
+        "src.core.organizer.organizer.move_file",
+        return_value=None,
+    )
+    policy = {
+        "name": "archive-old",
+        "when": {"age_days_gte": 30},
+        "then": {"move_to": str(tmp_path / "Archive")},
+    }
+    file = _aged_file(tmp_path)
+    actions = run_policies([file], [policy], dry_run=False)
+    assert actions == []
+    mock_move.assert_called_once_with(file, tmp_path / "Archive")
+
+
+def test_run_policies_refreshes_db_index_after_move(tmp_path, mocker):
+    """A successful move must refresh the DB index with the final path."""
+    target = tmp_path / "Archive" / "old-report.pdf"
+    target.parent.mkdir()
+    target.write_bytes(b"x" * 500)
+    mock_move = mocker.patch(
+        "src.core.organizer.organizer.move_file",
+        return_value=target,
+    )
+    mock_upsert = mocker.patch("src.services.db_service.db_service.upsert_file")
+    policy = {
+        "name": "archive-old",
+        "when": {"age_days_gte": 30},
+        "then": {"move_to": str(tmp_path / "Archive")},
+    }
+    file = _aged_file(tmp_path)
+    actions = run_policies([file], [policy], dry_run=False)
+    assert len(actions) == 1
+    mock_upsert.assert_called_once_with(target)
+
+
+def test_run_policies_first_match_wins_per_file(tmp_path, mocker):
+    """Policy order is priority: the first matching policy claims the file.
+
+    Dry-run previews must show exactly what a real run would do — one
+    action per file, no duplicates.
+    """
+    policy_a = {
+        "name": "a",
+        "when": {"age_days_gte": 30},
+        "then": {"move_to": str(tmp_path / "A")},
+    }
+    policy_b = {
+        "name": "b",
+        "when": {"age_days_gte": 30},
+        "then": {"move_to": str(tmp_path / "B")},
+    }
+    file = _aged_file(tmp_path)
+
+    dry_actions = run_policies([file], [policy_a, policy_b], dry_run=True)
+    assert [a.policy_name for a in dry_actions] == ["a"]
+
+    mock_move = mocker.patch(
+        "src.core.organizer.organizer.move_file",
+        return_value=tmp_path / "A" / "old-report.pdf",
+    )
+    real_actions = run_policies([file], [policy_a, policy_b], dry_run=False)
+    assert [a.policy_name for a in real_actions] == ["a"]
+    mock_move.assert_called_once()  # the file is never double-moved

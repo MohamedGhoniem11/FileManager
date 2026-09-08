@@ -12,6 +12,7 @@ from src.services.logger import logger
 from src.services.config_service import config_service
 from src.core.health_engine import health_engine
 from src.core.organizer import organizer
+from src.core.lifecycle import run_policies
 from src.services.db_service import db_service
 
 
@@ -179,6 +180,36 @@ class HealthService:
 
         return stat_summary
 
+    def run_lifecycle_policies(self) -> Dict:
+        """Scheduled-run driver for lifecycle age/size/category policies.
+
+        Walks every configured watch location, then evaluates policies over
+        the collected files. Honors ``cleanup.dry_run`` so scheduled runs
+        preview by default and only execute when Safe Mode is off. Returns
+        a summary for logging and GUI reporting.
+        """
+        policies = config_service.get("lifecycle_policies", [])
+        if not policies:
+            return {"checked": 0, "actions": 0, "dry_run": True}
+
+        locations = config_service.get("watch_locations", [])
+        if not locations and config_service.get("watch_directory"):
+            locations = [{"path": config_service.get("watch_directory")}]
+
+        paths: List[Path] = []
+        for loc in locations:
+            root = Path(loc["path"])
+            if root.exists():
+                paths.extend(p for p in root.rglob("*") if p.is_file())
+
+        dry_run = config_service.get("cleanup", {}).get("dry_run", True)
+        actions = run_policies(paths, policies, dry_run=dry_run)
+        logger.info(
+            f"Lifecycle policies: {len(actions)} action(s) over {len(paths)} file(s) "
+            f"(dry_run={dry_run})"
+        )
+        return {"checked": len(paths), "actions": len(actions), "dry_run": dry_run}
+
     def run_auto_maintenance(self):
         """Threaded function for scheduled maintenance."""
         while True:
@@ -189,6 +220,7 @@ class HealthService:
                 logger.info("Scheduled maintenance starting...")
                 report = self.run_audit()
                 self.execute_cleanup(report)
+                self.run_lifecycle_policies()
             else:
                 time.sleep(300) # Check config every 5 mins
 
