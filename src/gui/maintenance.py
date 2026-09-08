@@ -6,10 +6,11 @@ Displays detailed reports on duplicates, orphans, and space savings.
 """
 import customtkinter as ctk
 import threading
+from tkinter import messagebox
+from src.core.organizer import organizer
 from src.services.health_service import health_service
 from src.services.config_service import config_service
 from src.services.logger import logger
-from tkinter import messagebox
 from .theme import Theme
 
 class MaintenanceFrame(ctk.CTkFrame):
@@ -68,6 +69,21 @@ class MaintenanceFrame(ctk.CTkFrame):
         self.cleanup_btn.grid(row=0, column=1, padx=Theme.PAD_LG, pady=Theme.PAD_LG)
         self.cleanup_btn.configure(state="disabled")
 
+        self.undo_btn = ctk.CTkButton(
+            self.action_frame,
+            text="Undo Last Move",
+            command=self.undo_last_move,
+            fg_color="transparent",
+            border_width=1,
+            border_color=Theme.BORDER_LIGHT,
+            hover_color=Theme.BG_RAISED,
+            text_color=Theme.TEXT_PRIMARY,
+            height=Theme.BTN_H,
+            corner_radius=Theme.RADIUS_MD,
+            font=ctk.CTkFont(size=Theme.FONT_BODY_SIZE),
+        )
+        self.undo_btn.grid(row=0, column=2, padx=Theme.PAD_LG, pady=Theme.PAD_LG)
+
         # Report Area
         self.report_label = ctk.CTkLabel(
             self,
@@ -122,21 +138,48 @@ class MaintenanceFrame(ctk.CTkFrame):
 
     def show_report(self, report):
         self.report_label.configure(text="Audit Summary:")
-        
+        proposals = health_service.propose_actions(report)
+        self._proposals = proposals
+
         summary = (
             f"Empty Folders: {len(report['empty_folders'])}\n"
             f"Duplicates: {len(report['duplicates'])}\n"
             f"Orphans: {len(report['orphans'])}\n"
             f"0-Byte Files: {len(report['zero_byte_files'])}\n"
-            f"Potential Space Reclaimed: {report['space_waste_bytes'] / 1024 / 1024:.2f} MB"
+            f"Potential Space Reclaimed: {report['space_waste_bytes'] / 1024 / 1024:.2f} MB\n"
+            f"Proposed Actions: {len(proposals)}\n"
         )
-        
+        preview = "\n".join(self._format_proposal(p) for p in proposals)
+
         self.report_box.configure(state="normal")
         self.report_box.delete("1.0", "end")
-        self.report_box.insert("1.0", summary)
+        self.report_box.insert("1.0", summary + ("\n" + preview if preview else "\n(no actions proposed)\n"))
         self.report_box.configure(state="disabled")
-        
-        self.cleanup_btn.configure(state="normal")
+
+        self.cleanup_btn.configure(state="normal" if proposals else "disabled")
+
+    @staticmethod
+    def _format_proposal(p) -> str:
+        """One line per proposed action: what, from, to, and safety flags."""
+        dst = p.target if p.target else "(delete)"
+        safety = "[CONFIRM REQUIRED]" if p.requires_confirmation else (
+            "[UNDOABLE]" if p.undoable else "[IRREVERSIBLE]"
+        )
+        return f"{safety} {p.kind}: {p.source.name} -> {dst}"
+
+    def undo_last_move(self):
+        undone = organizer.undo_last()
+        if undone > 0:
+            messagebox.showinfo(
+                "Undo Complete",
+                f"Reversed {undone} move(s). Journal updated.",
+            )
+        else:
+            messagebox.showwarning(
+                "Nothing to Undo",
+                "No committed reversible moves could be reversed "
+                "(they may already be reverted, or the destination vanished).",
+            )
 
     def confirm_cleanup(self):
         dry_run = config_service.get("cleanup", {}).get("dry_run", True)

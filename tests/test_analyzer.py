@@ -235,3 +235,145 @@ def test_unknown_binary_profile_never_raises(tmp_path):
 def test_missing_file_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         extract_profile(tmp_path / "absent.pdf")
+
+
+# ---------------------------------------------------------------------------
+# robustness (deep pass: corrupt/truncated/empty inputs never raise)
+# ---------------------------------------------------------------------------
+
+def test_truncated_pdf_with_magic_degrades_cleanly(tmp_path):
+    """%PDF- magic but garbage body -> still a pdf profile, never an exception."""
+    bad = tmp_path / "broken.pdf"
+    bad.write_bytes(b"%PDF-1.4\ngarbage not a real xref table")
+
+    profile = extract_profile(bad)
+
+    assert profile.kind == "pdf"
+    assert isinstance(profile, ContentProfile)
+
+
+def test_pdf_with_zero_streams_produces_empty_text(tmp_path):
+    pdf = tmp_path / "blank.pdf"
+    pdf.write_bytes(b"%PDF-1.4\n%%EOF\n")
+
+    profile = extract_profile(pdf)
+
+    assert profile.kind == "pdf"
+    assert profile.text_sample == ""
+    assert profile.keywords == []
+
+
+def test_corrupt_png_after_signature_degrades(tmp_path):
+    """PNG magic + truncated chunk length -> image profile with no dims."""
+    bad = tmp_path / "mangled.png"
+    bad.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\xff\xff\xff\xff" + b"\x00" * 4)
+
+    profile = extract_profile(bad)
+
+    assert profile.kind == "image"
+    assert profile.dimensions is None
+    assert isinstance(profile, ContentProfile)
+
+
+def test_png_with_short_ihdr_has_no_dimensions(tmp_path):
+    """IHDR chunk shorter than 8 bytes (struct.error path)."""
+    data = (
+        b"\x89PNG\r\n\x1a\n"
+        + _png_chunk(b"IHDR", b"\x00\x01")
+        + _png_chunk(b"IEND", b"")
+    )
+    img = tmp_path / "short.png"
+    img.write_bytes(data)
+
+    profile = extract_profile(img)
+
+    assert profile.kind == "image"
+    assert profile.dimensions is None
+
+
+def test_jpeg_truncated_after_sof_length_degrades(tmp_path):
+    """SOF0 with a bad segment length -> dimensions stay None, no crash."""
+    jpg = (
+        b"\xff\xd8"
+        + b"\xff\xc0" + b"\x00\x0b"          # length shorter than needed
+        + b"\x08\x00\x10"                    # not enough bytes for HH
+        + b"\xff\xd9"
+    )
+    img = tmp_path / "tiny.jpg"
+    img.write_bytes(jpg)
+
+    profile = extract_profile(img)
+
+    assert profile.kind == "image"
+    assert profile.metadata.get("has_exif") is False
+    assert isinstance(profile, ContentProfile)
+
+
+def test_corrupt_zip_still_returns_archive_profile(tmp_path):
+    """PK magic but unreadable zip -> archive profile, empty manifest."""
+    bad = tmp_path / "broken.zip"
+    bad.write_bytes(b"PK\x03\x04" + b"\x00" * 64)
+
+    profile = extract_profile(bad)
+
+    assert profile.kind == "archive"
+    assert profile.metadata["members"] == []
+
+
+def test_corrupt_tar_still_returns_archive_profile(tmp_path):
+    """ustar marker but broken body -> archive profile, empty manifest."""
+    bad = tmp_path / "broken.tar"
+    bad.write_bytes(b"ustar" + b"\x00" * 128)
+
+    profile = extract_profile(bad)
+
+    assert profile.kind == "archive"
+    assert profile.metadata["members"] == []
+
+
+def test_empty_file_is_unknown_not_crash(tmp_path):
+    empty = tmp_path / "nothing.bin"
+    empty.write_bytes(b"")
+
+    profile = extract_profile(empty)
+
+    assert profile.kind in ("binary", "unknown")
+    assert profile.has_content is False
+
+
+def test_null_bytes_in_head_are_not_text(tmp_path):
+    """NUL in the first 512 bytes forces the binary path, never 'text'."""
+    f = tmp_path / "mixed.dat"
+    f.write_bytes(b"hello\x00world" + b"\x00" * 8 + b"tail")
+
+    profile = extract_profile(f)
+
+    assert profile.kind not in ("text", "code")
+
+
+def test_directory_profile_never_raises(tmp_path):
+    profile = extract_profile(tmp_path)
+
+    assert profile.kind == "directory"
+    assert isinstance(profile, ContentProfile)
+
+
+def test_nonextension_code_file_detected_by_lookalike(tmp_path):
+    """No suffix but code-heavy content -> code profile (heuristic path)."""
+    f = tmp_path / "Makefile"
+    f.write_text("def build():\n    return compile()\nimport sys\n")
+
+    profile = extract_profile(f)
+
+    assert profile.kind == "code"
+
+
+
+def test_code_heuristic_prefers_kind_code_over_text(tmp_path):
+    """Dense keywords beat prose -> code, not text."""
+    f = tmp_path / "config.conf"
+    f.write_text("def parse():\n    return {\n        'a': 1\n    }\n")
+
+    profile = extract_profile(f)
+
+    assert profile.kind == "code"

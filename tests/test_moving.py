@@ -8,6 +8,7 @@ Covered here:
 - full observer _process_file flow: gate auto-move, gate ask/hold, rules scoping
 Matches hermetic style of tests/test_services.py: all watch dirs under tmp_path.
 """
+import os
 import time
 from pathlib import Path
 
@@ -128,8 +129,175 @@ def test_move_to_misc_uses_relative_misc_folder(tmp_path, organizer):
 
 
 # ---------------------------------------------------------------------------
-# move_file journaling (ADR-013: record before executing)
+# move_file edge cases (deep pass: failures, unicode, symlinks, EXDEV)
 # ---------------------------------------------------------------------------
+
+def test_move_permission_error_reverses_journal(tmp_path, mocker, organizer):
+    mocker.patch("shutil.move", side_effect=PermissionError(13, "denied"))
+    src = tmp_path / "locked.txt"
+    src.write_text("data")
+    target = tmp_path / "Documents"
+    target.mkdir()
+
+    dest = organizer.move_file(src, target)
+
+    assert dest is None
+    assert src.exists()                              # file untouched
+    assert db_service.journal_query(status="reversed")
+    assert db_service.journal_query(status="committed") == []
+
+
+def test_move_oserror_exdev_reverses_journal(tmp_path, mocker, organizer):
+    import errno
+    mocker.patch("shutil.move", side_effect=OSError(errno.EXDEV, "cross-device"))
+    src = tmp_path / "otherdev.txt"
+    src.write_text("data")
+    target = tmp_path / "Misc"
+    target.mkdir()
+
+    dest = organizer.move_file(src, target)
+
+    assert dest is None
+    assert src.exists()
+    assert db_service.journal_query(status="reversed")
+
+
+def test_move_unicode_filename_no_collision(tmp_path, organizer):
+    src = tmp_path / "ملف جديد ١٢٣.txt"
+    src.write_text("unicode")
+    target = tmp_path / "Documents"
+    target.mkdir()
+
+    dest = organizer.move_file(src, target)
+
+    assert dest == target / "ملف جديد ١٢٣.txt"
+    assert dest.exists() and not src.exists()
+
+
+def test_move_case_different_name_is_distinct_on_posix(tmp_path, organizer):
+    skip_posix = os.name == "nt"
+    src = tmp_path / "Readme.txt"
+    src.write_text("lower")
+    target = tmp_path / "Docs"
+    target.mkdir()
+    (target / "README.txt").write_text("upper")      # only collides on NTFS
+
+    dest = organizer.move_file(src, target)
+
+    if skip_posix:
+        assert dest == target / "Readme (1).txt"
+    else:
+        assert dest == target / "Readme.txt"         # case-sensitive: distinct
+
+
+def test_move_symlink_source_moves_link_itself(tmp_path, organizer):
+    real = tmp_path / "real.txt"
+    real.write_text("content")
+    link = tmp_path / "alias.txt"
+    link.symlink_to(real)
+    target = tmp_path / "Links"
+    target.mkdir()
+
+    dest = organizer.move_file(link, target)
+
+    assert dest == target / "alias.txt"
+    assert not link.exists()                         # link moved, target stays
+    assert real.exists()
+    assert dest.is_symlink()
+
+
+def test_move_to_misc_creates_misc_dir_when_missing(tmp_path, organizer):
+    src = tmp_path / "stray.bin"
+    src.write_text("bytes")
+    misc = tmp_path / "Misc"
+
+    dest = organizer.move_to_misc(src)
+
+    assert misc.is_dir()                             # dir auto-created
+    assert dest == misc / "stray.bin" and dest.exists()
+
+
+# ---------------------------------------------------------------------------
+# undo_last guards (ADR-016: refuse to clobber or reverse foreign files)
+# ---------------------------------------------------------------------------
+
+def test_undo_skips_when_dest_vanished(tmp_path, organizer):
+    src = tmp_path / "a.txt"
+    src.write_text("data")
+    target = tmp_path / "Documents"
+    target.mkdir()
+    dest = organizer.move_file(src, target)
+    dest.unlink()                                    # file gone after move
+
+    assert organizer.undo_last() == 0
+    assert db_service.journal_query(status="committed")
+
+
+def test_undo_skips_when_source_occupied(tmp_path, organizer):
+    src = tmp_path / "a.txt"
+    src.write_text("data")
+    target = tmp_path / "Documents"
+    target.mkdir()
+    organizer.move_file(src, target)
+    (tmp_path / "a.txt").write_text("intruder")      # new file at source spot
+
+    assert organizer.undo_last() == 0
+    assert (tmp_path / "a.txt").read_text() == "intruder"
+
+
+def test_undo_skips_when_dest_inode_changed(tmp_path, organizer):
+    src = tmp_path / "a.txt"
+    src.write_text("data")
+    target = tmp_path / "Documents"
+    target.mkdir()
+    dest = organizer.move_file(src, target)
+    dest.unlink()
+    (target / "a.txt").write_text("replacement")     # different inode
+
+    assert organizer.undo_last() == 0
+    assert (target / "a.txt").read_text() == "replacement"
+
+
+def test_undo_success_restores_and_marks_reversed(tmp_path, organizer):
+    src = tmp_path / "report.txt"
+    src.write_text("original")
+    target = tmp_path / "Documents"
+    target.mkdir()
+    organizer.move_file(src, target)
+
+    assert organizer.undo_last() == 1
+    assert src.exists() and src.read_text() == "original"
+    assert db_service.journal_query(status="reversed")
+
+
+def test_undo_count_zero_and_negative_are_noops(tmp_path, organizer):
+    src = tmp_path / "a.txt"
+    src.write_text("data")
+    target = tmp_path / "Documents"
+    target.mkdir()
+    organizer.move_file(src, target)
+
+    assert organizer.undo_last(0) == 0
+    assert organizer.undo_last(-3) == 0
+    assert db_service.journal_query(status="committed")
+
+
+def test_undo_reverse_only_real_moves(tmp_path, organizer):
+    src = tmp_path / "b.txt"
+    src.write_text("data")
+    target = tmp_path / "Docs"
+    target.mkdir()
+    organizer.move_file(src, target)
+    # inject a fake committed entry that looks reversible
+    db_service.journal_record(
+        op_type="rename",
+        source_path=str(tmp_path / "never-existed.txt"),
+        dest_path=str(tmp_path / "Docs" / "never-existed.txt"),
+        inode=None, mtime=0.0, size=0, reversible=1,
+    )
+
+    assert organizer.undo_last() == 1               # only the real one reverses
+    assert src.exists()
 
 def test_move_records_journal_before_executing(tmp_path, organizer):
     src = tmp_path / "a.txt"
