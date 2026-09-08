@@ -33,6 +33,7 @@ The old FileManager is an ambitious beginner-to-intermediate project with a genu
 - **Evidence:** AST check: module-level imports are `[Classifier, Dict, List, Path, classifier, config_service, os]` — **`logger` is NOT imported**. Yet `logger.info(...)` is called inside the classification callback.
 - **Trigger:** any `config.json` change that re-runs classification with a non-logged code path → `NameError`.
 - **Verification:** AST static analysis (see appendix) — `logger` resolved to 0 imports, 1 usage.
+- **Fixed (Step 1, `2951940`):** `logger` imported in `classifier.py`.
 
 ### C2. `test_nlp_db.py` imports a symbol that doesn't exist — CI is red
 
@@ -40,12 +41,14 @@ The old FileManager is an ambitious beginner-to-intermediate project with a genu
 - **Evidence:** AST check of `src/services/nlp_service.py`: module-level names are only `['get_nlp_service', '_nlp_service_instance']`. The name `nlp_service` **does not exist**.
 - **Impact:** `pytest` fails at collection. **The CI badge is a lie.** (This is why the audit used AST analysis — the test suite cannot even collect.)
 - **Verification:** AST static analysis — `ImportError: cannot import name 'nlp_service'` is guaranteed.
+- **Fixed (Step 1, `2951940`):** `test_nlp_db.py` uses `get_nlp_service()`.
 
 ### C3. `startup_service.py` unconditionally imports Windows-only modules
 
 - **File:** `src/services/startup_service.py`
 - **Evidence:** imports `winshell` + `win32com` at module top level, unguarded.
 - **Impact:** on Linux/macOS the app crashes at import time. The README claims "cross-platform"; the code is Windows-only by construction.
+- **Fixed (Step 1, `2951940`):** imports platform-guarded; startup registration no-ops off-Windows.
 
 ### C4. README describes features that don't exist
 
@@ -53,6 +56,7 @@ The old FileManager is an ambitious beginner-to-intermediate project with a genu
 - **Evidence:** README claims a `FileLock` retry mechanism in `observer.py`; the actual code uses `time.sleep(1)` — a fixed sleep with no retry, no lock, no handle-release polling.
 - **Impact:** docs vs code drift. The "engineering challenges" section is fiction, which is worse than having no docs — it misleads.
 - README also claims a cooldown filter for event loops; the `on_modified` filter exists but the cooldown mechanism does not.
+- **Fixed (Step 1, `2951940`):** readiness retry replaces the fixed sleep; README claims corrected (see below).
 
 ### C6. `requirements.txt` cannot install on Linux — CI dies before tests run *(found during Step 1 setup)*
 
@@ -65,21 +69,25 @@ The old FileManager is an ambitious beginner-to-intermediate project with a genu
 
 - **File:** `src/services/db_service.py` — empty exception handler.
 - **Impact:** silent data divergence. A failed write/lookup vanishes with zero trace. The journaling upgrade (Phase 4) is impossible until every failure is visible.
+- **Fixed (Step 2):** all DB operations log structured ERROR entries on failure; `upsert_file` returns success boolean. Verified by failure-injection test.
 
 ### H2. SQLite runs without WAL / connection discipline
 
 - **File:** `src/services/db_service.py`
 - **Impact:** with concurrent threads (observer + GUI + NLP), "database is locked" errors are expected; no WAL mode, no single-writer discipline.
+- **Fixed (Step 2):** WAL mode + single persistent connection guarded by a lock. Verified by concurrent-thread stress test.
 
 ### H3. There is no undo anywhere
 
 - **File:** whole app — `organizer.py`, `observer.py` move paths.
 - **Impact:** one wrong rule = files scattered permanently. No reversible operation, no journal, no provenance ("where did X go?").
+- **Fixed (Step 2, groundwork):** append-only versioned journal schema + write-before-action journaling in `organizer.move_file` ([ADR-013](decisions/ADR-013-append-only-transaction-journal.md)). Undo replay itself is Step 3.
 
 ### H4. Relative config/log paths
 
 - **File:** `src/services/config_service.py`, `logger.py`
 - **Impact:** depends on CWD; breaks when launched from a different directory or as a packaged EXE. (Half of the "PyInstaller packaging issues" in the README trace back to this.)
+- **Fixed (Step 2):** canonical homes via `platformdirs` (config → `user_config_dir`, logs → `user_log_dir`, DB → `user_data_dir`) with a one-time migration of the legacy `config/config.json` ([ADR-014](decisions/ADR-014-cross-platform-platformdirs.md)).
 
 ### H5. `observer.py` races on large files
 

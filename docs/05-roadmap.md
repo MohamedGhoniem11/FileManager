@@ -5,7 +5,7 @@
 
 ---
 
-## Step 1 — Correctness fixes (green CI, stable app, honest docs)
+## Step 1 — Correctness fixes (green CI, stable app, honest docs) ✅ Done
 
 | # | Work | Fixes | Verification |
 |---|---|---|---|
@@ -18,15 +18,15 @@
 
 **Gate:** `pytest` green end-to-end. This alone turns the red CI badge into a real one.
 
-## Step 2 — Data integrity (journal groundwork)
+## Step 2 — Data integrity (journal groundwork) ✅ Done
 
 | # | Work | Fixes | Verification |
 |---|---|---|---|
-| 2.1 | SQLite WAL + single-connection discipline | H2 | concurrent-thread stress test |
-| 2.2 | Replace empty `except: pass` with structured logging | H1 | failure injection test |
-| 2.3 | Absolute config/log paths via `platformdirs` | H4 | launch from any CWD |
-| 2.4 | Config schema version + migration path | (F9) | version-bump migration test |
-| 2.5 | Transaction journal schema (append-only, versioned) | H3 | [ADR-013](decisions/ADR-013-transaction-journal.md) |
+| 2.1 | SQLite WAL + single-connection discipline | H2 | [concurrent-thread stress test](../tests/test_data_integrity.py) |
+| 2.2 | Replace empty `except: pass` with structured logging | H1 | [failure-injection test](../tests/test_data_integrity.py) |
+| 2.3 | Absolute config/log paths via `platformdirs` | H4 | [default-home tests](../tests/test_data_integrity.py), [ADR-014](decisions/ADR-014-cross-platform-platformdirs.md) |
+| 2.4 | Config schema version + migration path | (F9) | [version-bump migration tests](../tests/test_config.py) |
+| 2.5 | Transaction journal schema (append-only, versioned) | H3 | [journal tests](../tests/test_journal.py), [ADR-013](decisions/ADR-013-append-only-transaction-journal.md) |
 
 **Gate:** no silent failure paths remain; every move is journaled.
 

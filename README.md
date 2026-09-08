@@ -116,20 +116,11 @@ def _is_ready(self, file_path, retries=5, delay=0.2):
     return False
 ```
 
-### 2. PyInstaller Packaging Issues
+### 2. Packaging & Cross-Platform Paths
 
-**Problem**: `PyInstaller` failed to bundle the `en_core_web_sm` spaCy model and hidden imports like `babel`, resulting in runtime errors in the built executable.
+**Problem**: The app depended on its working directory for `config.json` and log files (audit [H4](docs/01-audit.md)). Launched from anywhere else — or as a packaged EXE — it silently wrote state to the wrong place.
 
-**Solution**: Created custom `hook-spacy.py` and explicit hidden-import declarations in `FileManager Pro.spec` to ensure all language model vectors and dependencies are included in the bundle.
-
-```python
-# FileManager Pro.spec excerpt
-hiddenimports=[
-    'babel.numbers',
-    'spacy.lang.en',
-    # ... additional imports
-]
-```
+**Solution**: All application state now resolves through `platformdirs` to OS-standard user directories: config → `user_config_dir("FileManager")`, logs → `user_log_dir("FileManager")`, database/journal → `user_data_dir("FileManager")` ([ADR-014](docs/decisions/ADR-014-cross-platform-platformdirs.md)). A one-time migration copies a legacy CWD-relative `config/config.json` if present. `build_exe.bat` bundles with a plain onefile PyInstaller build; the heavyweight spaCy bundling config is deliberately **not** maintained because the 700MB model is slated for removal (audit [M1](docs/01-audit.md), roadmap Step 4).
 
 ### 3. Infinite Event Loops
 
@@ -155,13 +146,23 @@ def _process_file(self, file_path):
 
 **Problem**: The cleanup command accidentally overwrote the entire `config.json` with a partial dictionary, destroying user settings.
 
-**Solution**: Implemented a `validate_and_merge` strategy in `config_service.py` that performs granular key updates rather than full overwrites:
+**Solution**: `config_service` never trusts a loaded file wholesale. `_validate_and_merge` merges the loaded JSON on top of `DEFAULT_CONFIG` with per-key type validation (wrong-typed keys fall back to defaults), and `save_config` is the only persisted write path. Since Step 2, the file carries a `schema_version` that `_apply_schema_migrations` upgrades in place ([F9](docs/01-audit.md)).
 
 ```python
-def update_config(self, updates):
-    current = self.load_config()
-    current.update(updates)  # Merge instead of replace
-    self.save_config(current)
+# src/services/config_service.py (simplified)
+def _validate_and_merge(self, loaded):
+    merged = DEFAULT_CONFIG.copy()
+    for key, value in loaded.items():
+        if key in DEFAULT_CONFIG:
+            # Basic type validation: wrong-typed keys fall back to defaults
+            if isinstance(value, type(DEFAULT_CONFIG[key])):
+                merged[key] = value
+    return merged
+
+def save_config(self, new_config):
+    with open(self._config_path, "w") as f:
+        json.dump(new_config, f, indent=4)
+    self.config = new_config
 ```
 
 ---

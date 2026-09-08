@@ -3,6 +3,7 @@ spacy
 customtkinter
 winshell; sys_platform == "win32"
 pypiwin32; sys_platform == "win32"
+platformdirs
 pyyaml
 pytest
 pytest-mock

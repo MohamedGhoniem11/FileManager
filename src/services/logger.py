@@ -1,7 +1,7 @@
 import logging
 """
 Logging Infrastructure
-----------------------
+---------------------
 Setup for dual-output logging (console and file) with queue support for GUI integration.
 """
 import logging.handlers
@@ -9,6 +9,15 @@ import sys
 import os
 import queue
 from pathlib import Path
+
+import platformdirs
+
+def default_log_path(log_file: str) -> Path:
+    """Log home resolves via platformdirs (ADR-014/H4); FILEMANAGER_LOG_DIR overrides."""
+    override = os.environ.get("FILEMANAGER_LOG_DIR")
+    if override:
+        return Path(override) / log_file
+    return Path(platformdirs.user_log_dir("FileManager")) / log_file
 
 def setup_logger(name: str = "filemanager", log_file: str = "app.log") -> logging.Logger:
     """Sets up a dual-output logger (console + file)."""
@@ -29,7 +38,7 @@ def setup_logger(name: str = "filemanager", log_file: str = "app.log") -> loggin
 
         # File Handler
         try:
-            log_path = Path("dist") / log_file
+            log_path = default_log_path(log_file)
             log_path.parent.mkdir(exist_ok=True)
             file_handler = logging.FileHandler(log_path)
             file_handler.setFormatter(formatter)

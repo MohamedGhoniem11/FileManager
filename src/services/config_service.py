@@ -3,13 +3,26 @@ import json
 Configuration Service
 ---------------------
 Singleton service managing application settings, persistence, and hot-reloading.
+
+H4 (roadmap 2.3): canonical config home resolves via platformdirs (ADR-014),
+with a one-time migration of the legacy CWD-relative config/config.json.
+F9 (roadmap 2.4): config file carries a schema_version; a MIGRATIONS map
+upgrades older files in place. Newer-than-supported versions are loaded
+without downgrade.
 """
+import shutil
 import threading
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Callable
+
+import platformdirs
+
 from .logger import logger
 
+SCHEMA_VERSION = 1
+
 DEFAULT_CONFIG = {
+    "schema_version": SCHEMA_VERSION,
     "watch_directory": str(Path.home() / "Downloads"),
     "monitor_enabled": True,
     "categories": {
@@ -46,17 +59,38 @@ DEFAULT_CONFIG = {
     "log_level": "INFO"
 }
 
+MIGRATIONS: Dict[int, Callable[[Dict[str, Any]], Dict[str, Any]]] = {}
+
 class ConfigService:
     _instance = None
-    _config_path = Path("config/config.json")
+    _DEFAULT_CONFIG_PATH = Path(platformdirs.user_config_dir("FileManager")) / "config.json"
     _callbacks: List[Callable] = []
+    SCHEMA_VERSION = SCHEMA_VERSION
+    MIGRATIONS = MIGRATIONS
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(ConfigService, cls).__new__(cls)
-            cls._instance.config = cls._instance._load_config()
-            cls._instance._last_mtime = cls._instance._get_mtime()
+            inst = super(ConfigService, cls).__new__(cls)
+            inst._config_path = cls._DEFAULT_CONFIG_PATH
+            inst._config: Optional[Dict[str, Any]] = None
+            inst._last_mtime = 0.0
+            cls._instance = inst
         return cls._instance
+
+    # -- lazy config access ----------------------------------------------------
+
+    @property
+    def config(self) -> Dict[str, Any]:
+        config = self._config
+        if config is None:
+            config = self._load_config()
+            self._config = config
+            self._last_mtime = self._get_mtime()
+        return config
+
+    @config.setter
+    def config(self, value: Dict[str, Any]):
+        self._config = value
 
     def _get_mtime(self) -> float:
         try:
@@ -64,36 +98,72 @@ class ConfigService:
         except OSError:
             return 0.0
 
+    # -- loading, migration, validation ------------------------------------------
+
     def _load_config(self) -> Dict[str, Any]:
         """Loads config from JSON file, validates it, and merges with defaults."""
         if not self._config_path.exists():
-            self._config_path.parent.mkdir(exist_ok=True)
-            self.save_config(DEFAULT_CONFIG)
-            return DEFAULT_CONFIG.copy()
+            self._migrate_legacy_config()
+        if not self._config_path.exists():
+            self._config_path.parent.mkdir(parents=True, exist_ok=True)
+            config = DEFAULT_CONFIG.copy()
+            self.save_config(config)
+            return config
 
         try:
             with open(self._config_path, "r") as f:
                 loaded = json.load(f)
+                loaded = self._apply_schema_migrations(loaded)
                 return self._validate_and_merge(loaded)
         except Exception as e:
             logger.error(f"Failed to load config: {e}. Using defaults.")
             return DEFAULT_CONFIG.copy()
 
+    def _migrate_legacy_config(self):
+        """Copies the pre-platformdirs relative config/config.json once (ADR-014)."""
+        if self._config_path != self._DEFAULT_CONFIG_PATH:
+            return
+        legacy = Path("config/config.json")
+        if legacy.exists():
+            self._config_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.copy2(legacy, self._config_path)
+                logger.info(
+                    f"Migrated legacy config {legacy} -> {self._config_path}"
+                )
+            except OSError as e:
+                logger.error(f"Failed to migrate legacy config: {e}")
+
+    def _apply_schema_migrations(self, loaded: Dict[str, Any]) -> Dict[str, Any]:
+        current = loaded.get("schema_version", 0)
+        if current > self.SCHEMA_VERSION:
+            logger.warning(
+                f"Config schema version {current} is newer than supported "
+                f"version {self.SCHEMA_VERSION}. Loading without downgrade."
+            )
+            return loaded
+        for version in range(current + 1, self.SCHEMA_VERSION + 1):
+            migration = self.MIGRATIONS.get(version)
+            if migration:
+                loaded = migration(loaded)
+        loaded["schema_version"] = self.SCHEMA_VERSION
+        return loaded
+
     def _validate_and_merge(self, loaded: Dict[str, Any]) -> Dict[str, Any]:
         """Ensures all required keys exist and types are correct."""
         merged = DEFAULT_CONFIG.copy()
-        
+
         # Shallow merge for top-level keys
         for key, value in loaded.items():
             if key in DEFAULT_CONFIG:
                 # Basic type validation
                 if isinstance(value, type(DEFAULT_CONFIG[key])):
                     merged[key] = value
-        
+
         # Deep merge for nested dicts (categories, gui_preferences)
         if "categories" in loaded and isinstance(loaded["categories"], dict):
             merged["categories"] = loaded["categories"]
-        
+
         if "gui_preferences" in loaded and isinstance(loaded["gui_preferences"], dict):
             for k, v in loaded["gui_preferences"].items():
                 if k in DEFAULT_CONFIG["gui_preferences"]:

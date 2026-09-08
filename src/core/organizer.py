@@ -12,6 +12,7 @@ from typing import Optional
 from src.utils.path_utils import sanitize_filename
 from src.services.logger import logger
 from src.services.config_service import config_service
+from src.services.db_service import db_service
 
 class Organizer:
     """Provides high-level file system operations with safety and collision management."""
@@ -20,29 +21,46 @@ class Organizer:
         """
         Moves a file to the target directory.
         Handles collisions by renaming if configured.
+        Every mutation is journaled BEFORE it executes (ADR-013).
         """
         if not source_path.exists():
             logger.warning(f"Source file {source_path} does not exist. Skipping.")
             return None
 
+        entry_id = None
         try:
             target_dir.mkdir(parents=True, exist_ok=True)
             dest_path = target_dir / source_path.name
-            
+            reversible = 1
+
             # Collision handling
             if dest_path.exists():
                 strategy = config_service.get("collision_strategy", "rename")
-                
+
                 if strategy == "skip":
                     logger.info(f"File {source_path.name} already exists in {target_dir}. Skipping.")
                     return None
                 elif strategy == "overwrite":
                     logger.info(f"Overwriting {dest_path}")
+                    reversible = 0
                 else: # Default: rename
                     dest_path = self._get_unique_path(dest_path)
 
+            # Journal the mutation before it executes (ADR-013 write-before-action)
+            stats = source_path.stat()
+            entry_id = db_service.journal_record(
+                op_type="rename",
+                source_path=str(source_path),
+                dest_path=str(dest_path),
+                inode=stats.st_ino,
+                mtime=stats.st_mtime,
+                size=stats.st_size,
+                reversible=reversible,
+            )
+
             # Move operation
             shutil.move(str(source_path), str(dest_path))
+            db_service.journal_mark_committed(entry_id)
             logger.info(f"Moved: {source_path.name} -> {dest_path.parent.name}/{dest_path.name}")
             return dest_path
 
@@ -50,7 +68,9 @@ class Organizer:
             logger.error(f"Permission denied when moving {source_path.name}. File might be in use.")
         except Exception as e:
             logger.error(f"Error moving {source_path.name}: {e}")
-        
+
+        if entry_id is not None:
+            db_service.journal_mark_reversed(entry_id)
         return None
 
     def delete_file(self, file_path: Path):
