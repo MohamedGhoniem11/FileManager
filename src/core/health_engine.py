@@ -7,10 +7,15 @@ Identifies empty folders, duplicate files, zero-byte files, and orphans.
 import hashlib
 import os
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Optional
+from typing import Any, Dict, List, Set, Tuple, Optional
 from src.services.logger import logger
 from src.services.config_service import config_service
 from src.core.classifier import classifier
+from src.core.fingerprint import fingerprint_file, hamming_distance
+from src.services.db_service import db_service
+
+#: Max hamming distance (of 64 bits) to consider two fingerprints "near-duplicate".
+_NEAR_DUP_MAX_HAMMING = 6
 
 class HealthEngine:
     """Core logic for performing deep-scans and directory auditing."""
@@ -35,6 +40,7 @@ class HealthEngine:
 
         # Track file hashes for deduplication
         hashes: Dict[str, List[Path]] = {}
+        fingerprint_entries: List[Tuple[Path, str, Any]] = []
 
         for dirpath, dirnames, filenames in os.walk(root_path, topdown=False):
             current_dir = Path(dirpath)
@@ -65,6 +71,9 @@ class HealthEngine:
                             if f_hash not in hashes:
                                 hashes[f_hash] = []
                             hashes[f_hash].append(file_path)
+                        fp = self._cached_fingerprint(file_path)
+                        if fp is not None:
+                            fingerprint_entries.append((file_path, *fp))
 
                 except Exception as e:
                     logger.error(f"Error scanning file {file_path}: {e}")
@@ -80,7 +89,56 @@ class HealthEngine:
                 except:
                     pass
 
+        self.results["fingerprint_clusters"] = self._cluster_fingerprints(fingerprint_entries)
+
         return self.results
+
+    def _cached_fingerprint(self, path: Path) -> Optional[Tuple[str, str]]:
+        """Fingerprint via the DB cache; falls back to computing + caching."""
+        cached = db_service.get_cached_fingerprint(path)
+        if cached is not None:
+            return cached
+        try:
+            fp = fingerprint_file(path)
+        except Exception:
+            return None
+        if fp["value"] is None:
+            return None
+        db_service.store_fingerprint(path, fp["kind"], fp["value"])
+        return fp["kind"], fp["value"]
+
+    def _cluster_fingerprints(self, entries: List[Tuple[Path, str, str]]) -> List[Dict]:
+        """Groups near-duplicate fingerprints into 'N files ≈ M versions' clusters."""
+        clusters: List[List[Tuple[Path, str, str]]] = []
+        for path, kind, value in entries:
+            placed = False
+            for cluster in clusters:
+                _, rep_kind, rep_value = cluster[0]
+                if (
+                    kind == rep_kind
+                    and isinstance(value, int)
+                    and isinstance(rep_value, int)
+                    and hamming_distance(rep_value, value) <= _NEAR_DUP_MAX_HAMMING
+                ):
+                    cluster.append((path, kind, value))
+                    placed = True
+                    break
+            if not placed:
+                clusters.append([(path, kind, value)])
+
+        reports: List[Dict] = []
+        for cluster in clusters:
+            if len(cluster) <= 1:
+                continue
+            versions = {v for _, _, v in cluster}
+            reports.append({
+                "kind": cluster[0][1],
+                "files": [path for path, _, _ in cluster],
+                "file_count": len(cluster),
+                "versions": len(versions),
+                "summary": f"{len(cluster)} files ≈ {len(versions)} real versions",
+            })
+        return reports
 
     def _calculate_hash(self, path: Path, chunk_size: int = 8192) -> Optional[str]:
         """Calculates SHA-256 hash of a file."""

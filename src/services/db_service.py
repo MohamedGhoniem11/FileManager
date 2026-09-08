@@ -117,6 +117,15 @@ class DbService:
             BEGIN
                 SELECT RAISE(ABORT, 'journal is append-only: immutable fields cannot change');
             END;
+
+            CREATE TABLE IF NOT EXISTS fingerprints (
+                path TEXT PRIMARY KEY,
+                kind TEXT NOT NULL,
+                value TEXT NOT NULL,
+                size INTEGER NOT NULL,
+                mtime REAL NOT NULL
+            );
+            CREATE INDEX IF NOT EXISTS idx_fingerprints_kind ON fingerprints(kind);
             """.format(schema_version=JOURNAL_SCHEMA_VERSION)
         )
 
@@ -331,6 +340,56 @@ class DbService:
                 (path, path),
             ).fetchall()
             return [dict(row) for row in rows]
+
+    # -- fingerprint cache (roadmap 5.1) --------------------------------------
+
+    def get_cached_fingerprint(self, file_path: Path) -> Optional[Tuple[str, Any]]:
+        """
+        Returns a cached (kind, value) fingerprint ONLY when the file's size
+        and mtime still match what was cached (recompute guard).
+        """
+        try:
+            stats = file_path.stat()
+            with self._lock:
+                conn = self.get_connection()
+                row = conn.execute(
+                    """
+                    SELECT kind, value FROM fingerprints
+                    WHERE path = ? AND size = ? AND mtime = ?
+                    """,
+                    (str(file_path), stats.st_size, stats.st_mtime),
+                ).fetchone()
+            if row is None:
+                return None
+            kind, encoded = row["kind"], row["value"]
+            if encoded.startswith("i:"):
+                return kind, int(encoded[2:])
+            if encoded.startswith("s:"):
+                return kind, encoded[2:]
+            return kind, encoded
+        except Exception as e:
+            logger.error(f"Fingerprint cache read failed for {file_path}: {e}")
+            return None
+
+    def store_fingerprint(self, file_path: Path, kind: str, value: Any) -> bool:
+        """Caches a fingerprint for a path; ints are kept parseable as text."""
+        try:
+            stats = file_path.stat()
+            encoded = f"i:{value}" if isinstance(value, int) else f"s:{value}"
+            with self._lock:
+                conn = self.get_connection()
+                conn.execute(
+                    """
+                    INSERT OR REPLACE INTO fingerprints (path, kind, value, size, mtime)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (str(file_path), kind, encoded, stats.st_size, stats.st_mtime),
+                )
+                conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Fingerprint cache write failed for {file_path}: {e}")
+            return False
 
 
 db_service = DbService()
