@@ -100,10 +100,14 @@ class DashboardFrame(ctk.CTkFrame):
             startup_service.disable_startup()
             logger.info("Startup disabled via dashboard.")
             
-        # Persist preference
-        auto = config_service.get("automation", {}).copy()
+        # Persist preference - merge into a copy of the full config.
+        # save_config() replaces the whole file, so passing only
+        # {"automation": auto} would wipe categories/cleanup/watch settings.
+        config = config_service.config.copy()
+        auto = config.get("automation", {}).copy()
         auto["run_on_startup"] = self.startup_var.get()
-        config_service.save_config({"automation": auto})
+        config["automation"] = auto
+        config_service.save_config(config)
 
     def toggle_monitor(self):
         if observer_service.is_running:

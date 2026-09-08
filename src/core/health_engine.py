@@ -29,7 +29,8 @@ class HealthEngine:
             "duplicates": {}, # {hash: [paths]}
             "orphans": [],
             "zero_byte_files": [],
-            "space_waste_bytes": 0
+            "space_waste_bytes": 0,
+            "fingerprint_clusters": []
         }
 
     def scan_directory(self, root_path: Path) -> Dict:
