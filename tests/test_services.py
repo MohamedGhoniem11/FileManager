@@ -60,7 +60,13 @@ def test_handler_below_threshold_asks_never_moves(tmp_path, mocker):
     handler._process_file(test_file)
 
     mock_move.assert_not_called()
-    mock_upsert.assert_called_once_with(test_file)
+    mock_upsert.assert_called_once_with(
+        test_file,
+        "Documents",
+        gate_status="hold",
+        gate_confidence=0.45,
+        gate_reason="confidence 0.45 < ask 0.50",
+    )
 
 
 def test_handler_risky_rule_never_auto_moves(tmp_path, mocker):
@@ -82,7 +88,13 @@ def test_handler_risky_rule_never_auto_moves(tmp_path, mocker):
     handler._process_file(test_file)
 
     mock_move.assert_not_called()
-    mock_upsert.assert_called_once_with(test_file)
+    mock_upsert.assert_called_once_with(
+        test_file,
+        "Setups",
+        gate_status="ask",
+        gate_confidence=0.7,
+        gate_reason="risk-flagged: effective 0.70 (capped from 0.95) -> ask",
+    )
 
 
 def test_handler_skips_temp_suffix_files(tmp_path, mocker):

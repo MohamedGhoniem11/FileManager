@@ -43,6 +43,8 @@ class DbService:
                 conn.execute("PRAGMA journal_mode=WAL")
                 conn.execute("PRAGMA busy_timeout=5000")
                 self._create_schema(conn)
+                conn.commit()
+                self._migrate_schema(conn)
                 self._conn = conn
             return self._conn
 
@@ -78,7 +80,11 @@ class DbService:
                 size INTEGER,
                 category TEXT,
                 created_at DATETIME,
-                modified_at DATETIME
+                modified_at DATETIME,
+                gate_status TEXT,
+                gate_confidence REAL,
+                gate_reason TEXT,
+                gate_recorded_at DATETIME
             );
             CREATE INDEX IF NOT EXISTS idx_filename ON files(filename);
             CREATE INDEX IF NOT EXISTS idx_extension ON files(extension);
@@ -129,22 +135,65 @@ class DbService:
             """.format(schema_version=JOURNAL_SCHEMA_VERSION)
         )
 
+    def _migrate_schema(self, conn: sqlite3.Connection):
+        """Adds columns introduced after the original schema shipped.
+
+        ``CREATE TABLE IF NOT EXISTS`` never touches an existing table, so
+        new columns land here as idempotent ALTERs. Each addition is guarded
+        by a ``PRAGMA table_info`` check so re-running is a no-op.
+        """
+        with self._lock:
+            existing = {row["name"] for row in conn.execute("PRAGMA table_info(files)")}
+            additions = {
+                "gate_status": "TEXT",
+                "gate_confidence": "REAL",
+                "gate_reason": "TEXT",
+                "gate_recorded_at": "DATETIME",
+            }
+            for column, decl in additions.items():
+                if column not in existing:
+                    conn.execute(f"ALTER TABLE files ADD COLUMN {column} {decl}")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_gate_status ON files(gate_status)"
+            )
+            conn.commit()
+
     # -- files index -----------------------------------------------------------
 
-    def upsert_file(self, file_path: Path) -> bool:
-        """Adds or updates a file's metadata in the index."""
+    def upsert_file(
+        self,
+        file_path: Path,
+        category: Optional[str] = None,
+        *,
+        gate_status: Optional[str] = None,
+        gate_confidence: Optional[float] = None,
+        gate_reason: Optional[str] = None,
+    ) -> bool:
+        """Adds or updates a file's metadata in the index.
+
+        ``category`` is normally re-derived from the classifier; pass it to
+        avoid a redundant classification (the caller already knows it).
+        ``gate_status``/``gate_confidence``/``gate_reason`` persist an
+        ask/hold decision so the file appears in the Needs Review queue.
+        Omitted gate fields (None) clear any previous gate state.
+        """
         try:
             stats = file_path.stat()
-            from src.core.classifier import classifier
-            category = classifier.classify(file_path)
+            if category is None:
+                from src.core.classifier import classifier
+                category = classifier.classify(file_path)
+
+            gate_recorded_at = datetime.now().isoformat() if gate_status else None
 
             with self._lock:
                 conn = self.get_connection()
                 conn.execute(
                     """
                     INSERT OR REPLACE INTO files
-                        (path, filename, extension, size, category, created_at, modified_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                        (path, filename, extension, size, category, created_at,
+                         modified_at, gate_status, gate_confidence, gate_reason,
+                         gate_recorded_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         str(file_path),
@@ -154,6 +203,10 @@ class DbService:
                         category,
                         datetime.fromtimestamp(stats.st_ctime).isoformat(),
                         datetime.fromtimestamp(stats.st_mtime).isoformat(),
+                        gate_status,
+                        gate_confidence,
+                        gate_reason,
+                        gate_recorded_at,
                     ),
                 )
                 conn.commit()
@@ -231,6 +284,70 @@ class DbService:
         except Exception as e:
             logger.error(f"Failed to get stats: {e}")
             return {"error": str(e)}
+
+    # -- needs-review queue (gate ask/hold) ------------------------------------
+
+    def query_needs_review(self) -> List[Dict]:
+        """Returns files currently gated ``ask`` or ``hold``, oldest first.
+
+        These are the files the human-in-the-loop gate left in place for the
+        user to review. Auto-moved files are never listed here; resolved
+        files drop out the moment their gate state is cleared.
+        """
+        try:
+            with self._lock:
+                conn = self.get_connection()
+                rows = conn.execute(
+                    """
+                    SELECT path, filename, category, size, gate_status,
+                           gate_confidence, gate_reason, gate_recorded_at
+                    FROM files
+                    WHERE gate_status IN ('ask', 'hold')
+                    ORDER BY gate_recorded_at ASC
+                    """
+                ).fetchall()
+                return [dict(row) for row in rows]
+        except Exception as e:
+            logger.error(f"Needs-review query failed: {e}")
+            return []
+
+    def count_needs_review(self) -> int:
+        """Number of files waiting in the review queue (ask + hold)."""
+        try:
+            with self._lock:
+                conn = self.get_connection()
+                row = conn.execute(
+                    "SELECT COUNT(*) FROM files WHERE gate_status IN ('ask', 'hold')"
+                ).fetchone()
+                return row[0]
+        except Exception as e:
+            logger.error(f"Needs-review count failed: {e}")
+            return 0
+
+    def resolve_review(self, file_path: Path) -> bool:
+        """Clears the gate state so a file leaves the review queue.
+
+        Called after the user reviews a file (accepted/moved/ignored) or
+        when the file disappears. Does not delete the indexed row — the
+        file stays searchable, it just no longer demands attention.
+        """
+        try:
+            with self._lock:
+                conn = self.get_connection()
+                conn.execute(
+                    """
+                    UPDATE files
+                    SET gate_status = NULL, gate_confidence = NULL,
+                        gate_reason = NULL, gate_recorded_at = NULL
+                    WHERE path = ?
+                    """,
+                    (str(file_path),),
+                )
+                conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to resolve review for {file_path}: {e}")
+            return False
 
     # -- transaction journal (ADR-013) -----------------------------------------
 

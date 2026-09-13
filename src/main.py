@@ -20,8 +20,23 @@ def engine_worker():
         config_service.check_for_updates()
         time.sleep(2)
 
+def log_excepthook(exc_type, exc_value, exc_tb):
+    logger.critical(
+        f"Unhandled exception: {exc_type.__name__}: {exc_value}",
+        exc_info=(exc_type, exc_value, exc_tb),
+    )
+
+def log_thread_exception(args):
+    logger.critical(
+        f"Unhandled exception in thread '{args.thread.name}': "
+        f"{args.exc_type.__name__}: {args.exc_value}",
+        exc_info=(args.exc_type, args.exc_value, args.exc_traceback),
+    )
+
 def main():
     multiprocessing.freeze_support()
+    sys.excepthook = log_excepthook
+    threading.excepthook = log_thread_exception
     logger.info("Starting File Manager Pro...")
     
     # Auto-start observer if enabled in config

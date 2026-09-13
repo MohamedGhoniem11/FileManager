@@ -112,6 +112,7 @@ def run_policies(
                 handled.add(path)
                 continue
             logger.info(f"Lifecycle '{action.policy_name}': moved {path} -> {final}")
+            db_service.remove_file(action.source)
             if final.exists():
                 db_service.upsert_file(final)
             actions.append(PolicyAction(

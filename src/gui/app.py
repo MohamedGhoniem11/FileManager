@@ -7,11 +7,13 @@ Handles view switching, navigation, and global layout.
 import customtkinter as ctk
 from src.services.config_service import config_service
 from src.services.logger import logger
+from src.services.db_service import db_service
 from .dashboard import DashboardFrame
 from .logs import LogsFrame
 from .settings import SettingsFrame
 from .maintenance import MaintenanceFrame
 from .chat import ChatFrame
+from .needs_review import NeedsReviewFrame
 from .theme import Theme
 
 class App(ctk.CTk):
@@ -44,14 +46,17 @@ class App(ctk.CTk):
         self.dashboard_btn = self._make_nav_button("Dashboard", "dashboard")
         self.dashboard_btn.grid(row=1, column=0, padx=Theme.PAD_MD, pady=(0, 2), sticky="ew")
 
+        self.needs_review_btn = self._make_nav_button("Needs Review", "needs_review")
+        self.needs_review_btn.grid(row=2, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
+
         self.logs_btn = self._make_nav_button("Logs", "logs")
-        self.logs_btn.grid(row=2, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
+        self.logs_btn.grid(row=3, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
 
         self.maintenance_btn = self._make_nav_button("Maintenance", "maintenance")
-        self.maintenance_btn.grid(row=3, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
+        self.maintenance_btn.grid(row=4, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
 
         self.assistant_btn = self._make_nav_button("Assistant", "assistant")
-        self.assistant_btn.grid(row=4, column=0, padx=Theme.PAD_MD, pady=(2, 0), sticky="ew")
+        self.assistant_btn.grid(row=5, column=0, padx=Theme.PAD_MD, pady=(2, 0), sticky="ew")
 
         # Settings pinned to the bottom of the sidebar (desktop-app pattern)
         self.settings_btn = self._make_nav_button("⚙ Settings", "settings")
@@ -63,9 +68,18 @@ class App(ctk.CTk):
         self.settings_frame = SettingsFrame(self, corner_radius=0, fg_color="transparent")
         self.maintenance_frame = MaintenanceFrame(self, corner_radius=0, fg_color="transparent")
         self.assistant_frame = ChatFrame(self, corner_radius=0, fg_color="transparent")
+        self.needs_review_frame = NeedsReviewFrame(self, corner_radius=0, fg_color="transparent")
 
         # Initial Frame
         self.select_frame("dashboard")
+        self.refresh_review_badge()
+
+    def refresh_review_badge(self):
+        count = db_service.count_needs_review()
+        self.needs_review_btn.configure(
+            text=f"Needs Review ({count})" if count else "Needs Review"
+        )
+        self.after(5000, self.refresh_review_badge)
 
     def _make_nav_button(self, text: str, frame_name: str) -> ctk.CTkButton:
         return ctk.CTkButton(
@@ -94,6 +108,8 @@ class App(ctk.CTk):
         self.maintenance_btn.configure(text_color=Theme.TEXT_PRIMARY if name == "maintenance" else Theme.TEXT_SECONDARY)
         self.assistant_btn.configure(fg_color=Theme.ACCENT_SOFT if name == "assistant" else "transparent")
         self.assistant_btn.configure(text_color=Theme.TEXT_PRIMARY if name == "assistant" else Theme.TEXT_SECONDARY)
+        self.needs_review_btn.configure(fg_color=Theme.ACCENT_SOFT if name == "needs_review" else "transparent")
+        self.needs_review_btn.configure(text_color=Theme.TEXT_PRIMARY if name == "needs_review" else Theme.TEXT_SECONDARY)
 
         # Show selected frame
         if name == "dashboard":
@@ -120,6 +136,12 @@ class App(ctk.CTk):
             self.assistant_frame.grid(row=0, column=1, sticky="nsew")
         else:
             self.assistant_frame.grid_forget()
+
+        if name == "needs_review":
+            self.needs_review_frame.refresh()
+            self.needs_review_frame.grid(row=0, column=1, sticky="nsew")
+        else:
+            self.needs_review_frame.grid_forget()
 
 def start_gui():
     ctk.set_appearance_mode("dark")

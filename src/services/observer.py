@@ -75,6 +75,12 @@ class DownloadHandler(FileSystemEventHandler):
         below-threshold or risky file is indexed in place and left for the
         user to confirm (ask/hold), never auto-moved.
         """
+        try:
+            self._process_file_guarded(file_path)
+        except Exception as e:
+            logger.error(f"Error processing {file_path}: {e}", exc_info=True)
+
+    def _process_file_guarded(self, file_path: Path):
         if not self._is_ready(file_path):
             logger.warning(f"File never became ready; skipping: {file_path}")
             return
@@ -100,7 +106,13 @@ class DownloadHandler(FileSystemEventHandler):
             logger.info(
                 f"Gate {decision.action} for {file_path.name}: {decision.reason}"
             )
-            db_service.upsert_file(file_path)
+            db_service.upsert_file(
+                file_path,
+                category,
+                gate_status=decision.action,
+                gate_confidence=decision.effective_confidence,
+                gate_reason=decision.reason,
+            )
             return
 
         # Rule redirect wins over the classifier's own category.
