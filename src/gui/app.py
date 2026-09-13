@@ -41,26 +41,19 @@ class App(ctk.CTk):
             text_color=Theme.TEXT_PRIMARY,
             font=ctk.CTkFont(size=Theme.FONT_H1_SIZE, weight="bold"),
         )
-        self.logo_label.grid(row=0, column=0, padx=Theme.PAD_LG, pady=(24, 20))
+        self.logo_label.grid(row=0, column=0, padx=Theme.PAD_LG, pady=(24, 20), sticky="w")
 
-        self.dashboard_btn = self._make_nav_button("Dashboard", "dashboard")
-        self.dashboard_btn.grid(row=1, column=0, padx=Theme.PAD_MD, pady=(0, 2), sticky="ew")
+        self.nav_buttons = {}  # name -> CTkButton
+        self.nav_indicators = {}  # name -> 3px accent bar on button's left edge
 
-        self.needs_review_btn = self._make_nav_button("Needs Review", "needs_review")
-        self.needs_review_btn.grid(row=2, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
-
-        self.logs_btn = self._make_nav_button("Logs", "logs")
-        self.logs_btn.grid(row=3, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
-
-        self.maintenance_btn = self._make_nav_button("Maintenance", "maintenance")
-        self.maintenance_btn.grid(row=4, column=0, padx=Theme.PAD_MD, pady=2, sticky="ew")
-
-        self.assistant_btn = self._make_nav_button("Assistant", "assistant")
-        self.assistant_btn.grid(row=5, column=0, padx=Theme.PAD_MD, pady=(2, 0), sticky="ew")
+        self.dashboard_btn = self._register_nav("dashboard", "Dashboard", 1)
+        self.needs_review_btn = self._register_nav("needs_review", "Needs Review", 2)
+        self.logs_btn = self._register_nav("logs", "Logs", 3)
+        self.maintenance_btn = self._register_nav("maintenance", "Maintenance", 4)
+        self.assistant_btn = self._register_nav("assistant", "Assistant", 5)
 
         # Settings pinned to the bottom of the sidebar (desktop-app pattern)
-        self.settings_btn = self._make_nav_button("⚙ Settings", "settings")
-        self.settings_btn.grid(row=7, column=0, padx=Theme.PAD_MD, pady=(0, Theme.PAD_LG), sticky="ew")
+        self.settings_btn = self._register_nav("settings", "⚙ Settings", 7, bottom=True)
 
         # Main Content Frames
         self.dashboard_frame = DashboardFrame(self, corner_radius=0, fg_color="transparent")
@@ -96,20 +89,33 @@ class App(ctk.CTk):
             font=ctk.CTkFont(size=Theme.FONT_BODY_SIZE),
         )
 
+    def _register_nav(self, name: str, text: str, row: int, bottom: bool = False) -> ctk.CTkButton:
+        button = self._make_nav_button(text, name)
+        pady = (0, Theme.PAD_LG) if bottom else (0, 2) if row == 1 else 2
+        button.grid(row=row, column=0, padx=Theme.PAD_MD, pady=pady, sticky="ew")
+        self.nav_buttons[name] = button
+
+        indicator = ctk.CTkFrame(
+            self.sidebar_frame,
+            width=3,
+            height=Theme.ROW_H,
+            corner_radius=0,
+            fg_color="transparent",
+        )
+        indicator.place(in_=button, x=0, y=0, relheight=1, bordermode="outside")
+        self.nav_indicators[name] = indicator
+        return button
+
     def select_frame(self, name):
-        # Reset button colors
-        self.dashboard_btn.configure(fg_color=Theme.ACCENT_SOFT if name == "dashboard" else "transparent")
-        self.dashboard_btn.configure(text_color=Theme.TEXT_PRIMARY if name == "dashboard" else Theme.TEXT_SECONDARY)
-        self.logs_btn.configure(fg_color=Theme.ACCENT_SOFT if name == "logs" else "transparent")
-        self.logs_btn.configure(text_color=Theme.TEXT_PRIMARY if name == "logs" else Theme.TEXT_SECONDARY)
-        self.settings_btn.configure(fg_color=Theme.ACCENT_SOFT if name == "settings" else "transparent")
-        self.settings_btn.configure(text_color=Theme.TEXT_PRIMARY if name == "settings" else Theme.TEXT_SECONDARY)
-        self.maintenance_btn.configure(fg_color=Theme.ACCENT_SOFT if name == "maintenance" else "transparent")
-        self.maintenance_btn.configure(text_color=Theme.TEXT_PRIMARY if name == "maintenance" else Theme.TEXT_SECONDARY)
-        self.assistant_btn.configure(fg_color=Theme.ACCENT_SOFT if name == "assistant" else "transparent")
-        self.assistant_btn.configure(text_color=Theme.TEXT_PRIMARY if name == "assistant" else Theme.TEXT_SECONDARY)
-        self.needs_review_btn.configure(fg_color=Theme.ACCENT_SOFT if name == "needs_review" else "transparent")
-        self.needs_review_btn.configure(text_color=Theme.TEXT_PRIMARY if name == "needs_review" else Theme.TEXT_SECONDARY)
+        for nav_name, btn in self.nav_buttons.items():
+            active = nav_name == name
+            btn.configure(
+                fg_color=Theme.ACCENT_SOFT if active else "transparent",
+                text_color=Theme.TEXT_PRIMARY if active else Theme.TEXT_SECONDARY,
+            )
+            self.nav_indicators[nav_name].configure(
+                fg_color=Theme.ACCENT if active else "transparent"
+            )
 
         # Show selected frame
         if name == "dashboard":

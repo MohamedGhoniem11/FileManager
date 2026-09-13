@@ -17,6 +17,7 @@ from src.services.db_service import db_service
 from src.services.logger import logger
 from .theme import Theme
 
+
 class NeedsReviewFrame(ctk.CTkFrame):
     """Queue of gated files awaiting a human decision."""
     def __init__(self, master, **kwargs):
@@ -123,31 +124,61 @@ class NeedsReviewFrame(ctk.CTkFrame):
         card.pack(fill="x", pady=(0, Theme.PAD_SM))
         card.grid_columnconfigure(0, weight=1)
 
-        name_color = Theme.WARNING if row["gate_status"] == "ask" else Theme.ERROR
+        is_ask = row["gate_status"] == "ask"
+        status_color = Theme.WARNING if is_ask else Theme.ERROR
+        status_soft = Theme.WARNING_SOFT if is_ask else Theme.ERROR_SOFT
+        cat_color = Theme.category_color(row["category"])
+
+        # Row 0: status chip + filename + category chip
+        row0 = ctk.CTkFrame(card, fg_color="transparent")
+        row0.grid(row=0, column=0, padx=Theme.PAD_MD, pady=(Theme.PAD_MD, 0), sticky="ew")
+
+        status_chip = ctk.CTkLabel(
+            row0,
+            text=row["gate_status"].upper(),
+            text_color=status_color,
+            fg_color=status_soft,
+            corner_radius=Theme.RADIUS_SM,
+            font=ctk.CTkFont(size=Theme.FONT_SMALL_SIZE, weight="bold"),
+        )
+        status_chip.grid(row=0, column=0, padx=(0, Theme.PAD_SM), sticky="w")
+
         ctk.CTkLabel(
-            card,
-            text=f"[{row['gate_status'].upper()}]  {path.name}",
+            row0,
+            text=path.name,
             text_color=Theme.TEXT_PRIMARY,
             font=ctk.CTkFont(size=Theme.FONT_BODY_SIZE, weight="bold"),
-        ).grid(row=0, column=0, padx=Theme.PAD_MD, pady=(Theme.PAD_SM, 0), sticky="w")
+        ).grid(row=0, column=1, padx=(0, Theme.PAD_SM), sticky="w")
 
-        meta = f"{row['category']}  ·  {row['size'] / 1024:.1f} KB  ·  confidence {row['gate_confidence']:.2f}"
+        cat_chip = ctk.CTkLabel(
+            row0,
+            text=row["category"],
+            text_color=cat_color,
+            font=ctk.CTkFont(size=Theme.FONT_SMALL_SIZE),
+        )
+        cat_chip.grid(row=0, column=2, sticky="w")
+        row0.grid_columnconfigure(1, weight=1)
+
+        # Row 1: metadata + confidence
+        meta = f"{row['size'] / 1024:.1f} KB  ·  confidence {row['gate_confidence']:.2f}"
         ctk.CTkLabel(
             card,
             text=meta,
-            text_color=name_color,
+            text_color=Theme.TEXT_SECONDARY,
             font=ctk.CTkFont(size=Theme.FONT_SMALL_SIZE),
-        ).grid(row=1, column=0, padx=Theme.PAD_MD, pady=(0, 0), sticky="w")
+        ).grid(row=1, column=0, padx=Theme.PAD_MD, pady=(Theme.PAD_SM, 0), sticky="w")
 
+        # Row 2: gate reason in mono
         ctk.CTkLabel(
             card,
             text=row["gate_reason"] or "gated for review",
             text_color=Theme.TEXT_SECONDARY,
             font=ctk.CTkFont(family=Theme.FONT_MONO, size=Theme.FONT_SMALL_SIZE),
-        ).grid(row=2, column=0, padx=Theme.PAD_MD, pady=(0, 0), sticky="w")
+        ).grid(row=2, column=0, padx=Theme.PAD_MD, pady=(Theme.PAD_SM, Theme.PAD_SM), sticky="w")
 
+        # Row 3: actions
         actions = ctk.CTkFrame(card, fg_color="transparent")
-        actions.grid(row=3, column=0, padx=Theme.PAD_MD, pady=(Theme.PAD_SM, Theme.PAD_SM), sticky="ew")
+        actions.grid(row=3, column=0, padx=Theme.PAD_MD, pady=(0, Theme.PAD_MD), sticky="ew")
 
         ctk.CTkButton(
             actions,
