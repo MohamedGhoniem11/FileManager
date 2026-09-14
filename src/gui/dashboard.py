@@ -108,7 +108,8 @@ class DashboardFrame(ctk.CTkFrame):
         self.cat_panel.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(4, weight=1)
 
-        self.cat_bars = None  # rebuilt lazily on each stats refresh
+        self._cat_bars_container = None  # created once, holds bar rows
+        self._bar_rows = {}  # {category_name: {frame, name_label, fill, count_label}}
 
         # Footer: watch path + settings
         self.info_label = ctk.CTkLabel(
@@ -167,7 +168,6 @@ class DashboardFrame(ctk.CTkFrame):
         self.update_status()
 
     def _refresh_stats(self):
-        """Rebuilds stat values + category bars from live DB data."""
         stats = db_service.get_stats()
         if not stats or "error" in stats:
             return
@@ -177,71 +177,81 @@ class DashboardFrame(ctk.CTkFrame):
         self.review_value.configure(text=str(db_service.count_needs_review()))
         self.categories_value.configure(text=str(len(categories)))
 
-        if self.cat_bars is not None:
-            for child in self.cat_bars.winfo_children():
-                child.destroy()
-        else:
+        # Lazy-create the container + title once
+        if self._cat_bars_container is None:
             ctk.CTkLabel(
                 self.cat_panel,
                 text="Files by Category",
                 text_color=Theme.TEXT_PRIMARY,
                 font=ctk.CTkFont(size=Theme.FONT_H2_SIZE, weight="bold"),
             ).grid(row=0, column=0, padx=Theme.PAD_LG, pady=(Theme.PAD_MD, Theme.PAD_SM), sticky="w")
-            self.cat_bars = ctk.CTkFrame(self.cat_panel, fg_color="transparent")
-            self.cat_bars.grid(row=1, column=0, padx=Theme.PAD_LG, pady=(0, Theme.PAD_LG), sticky="ew")
+            self._cat_bars_container = ctk.CTkFrame(self.cat_panel, fg_color="transparent")
+            self._cat_bars_container.grid(row=1, column=0, padx=Theme.PAD_LG, pady=(0, Theme.PAD_LG), sticky="ew")
 
-        if not categories:
-            ctk.CTkLabel(
-                self.cat_bars,
-                text="No files indexed yet.",
-                text_color=Theme.TEXT_MUTED,
-                font=ctk.CTkFont(size=Theme.FONT_BODY_SIZE),
-            ).pack(anchor="w")
-            return
+        current_names = set(categories.keys())
+        cached_names = set(self._bar_rows.keys())
 
-        max_count = max(categories.values())
-        for row, (name, count) in enumerate(sorted(categories.items(), key=lambda kv: -kv[1])):
-            color = Theme.category_color(name)
-            bar_row = ctk.CTkFrame(self.cat_bars, fg_color="transparent")
-            bar_row.pack(fill="x", pady=(2, 2))
-            bar_row.grid_columnconfigure(1, weight=1)
+        if current_names != cached_names:
+            for row_data in self._bar_rows.values():
+                row_data["frame"].destroy()
+            self._bar_rows.clear()
 
-            ctk.CTkLabel(
-                bar_row,
-                text=name,
-                text_color=Theme.TEXT_SECONDARY,
-                font=ctk.CTkFont(size=Theme.FONT_SMALL_SIZE),
-            ).grid(row=0, column=0, padx=(0, Theme.PAD_MD), sticky="w")
+            if not categories:
+                ctk.CTkLabel(
+                    self._cat_bars_container,
+                    text="No files indexed yet.",
+                    text_color=Theme.TEXT_MUTED,
+                    font=ctk.CTkFont(size=Theme.FONT_BODY_SIZE),
+                ).pack(anchor="w")
+                return
 
-            bar_bg = ctk.CTkFrame(bar_row, fg_color=Theme.BG_INSET, corner_radius=Theme.RADIUS_SM,
-                                  height=8)
-            bar_bg.grid(row=0, column=1, sticky="ew")
-            bar_bg.grid_propagate(False)
-            bar_bg.grid_columnconfigure(0, weight=1)
+            for name, count in sorted(categories.items(), key=lambda kv: -kv[1]):
+                color = Theme.category_color(name)
+                bar_row = ctk.CTkFrame(self._cat_bars_container, fg_color="transparent")
+                bar_row.pack(fill="x", pady=(2, 2))
+                bar_row.grid_columnconfigure(1, weight=1)
 
-            fill = ctk.CTkFrame(bar_bg, fg_color=color, corner_radius=Theme.RADIUS_SM, height=8)
-            fill.grid(row=0, column=0, sticky="w")
-            fill.grid_propagate(False)
-            frac = count / max_count if max_count else 0
-            fill.configure(width=max(8, int(bar_bg.winfo_width() * frac) or 8))
+                name_lbl = ctk.CTkLabel(
+                    bar_row,
+                    text=name,
+                    text_color=Theme.TEXT_SECONDARY,
+                    font=ctk.CTkFont(size=Theme.FONT_SMALL_SIZE),
+                )
+                name_lbl.grid(row=0, column=0, padx=(0, Theme.PAD_MD), sticky="w")
 
-            ctk.CTkLabel(
-                bar_row,
-                text=f"{count:,}",
-                text_color=Theme.TEXT_MUTED,
-                font=ctk.CTkFont(size=Theme.FONT_SMALL_SIZE),
-            ).grid(row=0, column=2, padx=(Theme.PAD_MD, 0), sticky="e")
+                bar_bg = ctk.CTkFrame(bar_row, fg_color=Theme.BG_INSET, corner_radius=Theme.RADIUS_SM, height=8)
+                bar_bg.grid(row=0, column=1, sticky="ew")
+                bar_bg.grid_propagate(False)
+                bar_bg.grid_columnconfigure(0, weight=1)
 
-            # width follows the real fraction once the frame is mapped
-            self._schedule_bar_width(fill, bar_bg, frac)
+                fill = ctk.CTkFrame(bar_bg, fg_color=color, corner_radius=Theme.RADIUS_SM, height=8)
+                fill.grid(row=0, column=0, sticky="w")
+                fill.grid_propagate(False)
 
-    def _schedule_bar_width(self, fill, bar_bg, frac: float):
-        def _size():
-            try:
-                fill.configure(width=max(8, int(bar_bg.winfo_width() * frac) or 8))
-            except Exception:
-                pass
-        self.after(100, _size)
+                count_lbl = ctk.CTkLabel(
+                    bar_row,
+                    text=f"{count:,}",
+                    text_color=Theme.TEXT_MUTED,
+                    font=ctk.CTkFont(size=Theme.FONT_SMALL_SIZE),
+                )
+                count_lbl.grid(row=0, column=2, padx=(Theme.PAD_MD, 0), sticky="e")
+
+                self._bar_rows[name] = {"frame": bar_row, "fill": fill, "bar_bg": bar_bg, "count_label": count_lbl}
+
+        # Update values in-place (no widget creation)
+        if categories:
+            max_count = max(categories.values()) or 1
+            for name, count in categories.items():
+                if name not in self._bar_rows:
+                    continue
+                row = self._bar_rows[name]
+                row["count_label"].configure(text=f"{count:,}")
+                frac = count / max_count
+                try:
+                    bar_w = row["bar_bg"].winfo_width()
+                    row["fill"].configure(width=max(8, int(bar_w * frac) or 8))
+                except Exception:
+                    pass  # bar_bg not yet mapped; corrects on next tick
 
     def update_status(self):
         if observer_service.is_running:
