@@ -19,7 +19,7 @@ import platformdirs
 
 from .logger import logger
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 DEFAULT_CONFIG = {
     "schema_version": SCHEMA_VERSION,
@@ -58,6 +58,13 @@ DEFAULT_CONFIG = {
         "auto_scan_interval_min": 60,
         "enable_auto_scan": False
     },
+    "ai": {
+        "enabled": False,
+        "model": "qwen3:0.6b",
+        "embed_model": "nomic-embed-text",
+        "timeout_s": 30,
+        "index_interval_s": 300
+    },
     "gui_preferences": {
         "theme": "dark",
         "show_logs": True,
@@ -78,8 +85,28 @@ def _migrate_to_v2(loaded: Dict[str, Any]) -> Dict[str, Any]:
     return loaded
 
 
+def _migrate_to_v3(loaded: Dict[str, Any]) -> Dict[str, Any]:
+    """Schema v3 adds the ``ai`` key (local LLM + RAG, ADR-017).
+
+    Off by default: the app is identical to pre-AI state until the user
+    explicitly flips ``ai.enabled`` to true.
+    """
+    loaded.setdefault(
+        "ai",
+        {
+            "enabled": False,
+            "model": "qwen3:0.6b",
+            "embed_model": "nomic-embed-text",
+            "timeout_s": 30,
+            "index_interval_s": 300,
+        },
+    )
+    return loaded
+
+
 MIGRATIONS: Dict[int, Callable[[Dict[str, Any]], Dict[str, Any]]] = {
     2: _migrate_to_v2,
+    3: _migrate_to_v3,
 }
 
 class ConfigService:

@@ -6,8 +6,10 @@ Supports message history, interactive search results, and config confirmation.
 """
 import customtkinter as ctk
 import threading
+from typing import Optional
 from src.services.nlp_service import get_nlp_service
 from src.services.db_service import db_service
+from src.services.config_service import config_service
 from src.core.config_agent import config_agent
 from src.services.logger import logger
 from .theme import Theme
@@ -181,7 +183,40 @@ class ChatFrame(ctk.CTkFrame):
         # Process in thread to keep GUI responsive
         threading.Thread(target=self._process_request, args=(text,), daemon=True).start()
 
+    def _attempt_ai(self, text: str) -> Optional[str]:
+        """Routes a message through the AI agent when enabled (ADR-017).
+
+        Returns a complete bot answer (search/status), or ``None`` to
+        continue with the deterministic flow. Config/scan requests return
+        ``None`` so the existing deterministic handlers own the action —
+        the LLM proposes, the deterministic systems dispose. Any failure
+        (ollama down, timeout, bad output) falls back silently.
+        """
+        try:
+            ai_cfg = config_service.get("ai", {})
+            if not ai_cfg.get("enabled"):
+                return None
+
+            from src.ai.agent import agent as fm_agent
+            from src.ai.rag_indexer import rag_indexer
+
+            try:
+                rag_indexer.start()
+            except Exception as e:
+                logger.warning(f"RAG indexer start failed: {e}")
+
+            ai_result = fm_agent.process(text)
+            return ai_result.get("response")
+        except Exception as e:
+            logger.warning(f"AI path unavailable, using deterministic NLP: {e}")
+            return None
+
     def _process_request(self, text: str):
+        reply = self._attempt_ai(text)
+        if reply:
+            self.after(0, lambda: self.add_message("Bot", reply))
+            return
+
         result = get_nlp_service().parse(text)
         intent = result["intent"]
         entities = result["entities"]
