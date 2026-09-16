@@ -1,3 +1,4 @@
+import itertools
 import pytest
 import time
 from pathlib import Path
@@ -112,10 +113,15 @@ def test_handler_waits_for_stable_size(tmp_path, mocker):
     growing_file = tmp_path / "growing.bin"
     growing_file.write_bytes(b"x" * 10)
 
-    # Simulate an in-progress write: each pair of size samples differs (10, 100, 10, 100...)
-    sizes = iter([10, 100, 10, 100])
     from types import SimpleNamespace
-    mocker.patch("pathlib.Path.stat", side_effect=lambda: SimpleNamespace(st_size=next(sizes)))
+    real_stat = Path.stat
+    sizes = itertools.cycle([10, 100])
+    def fake_stat(self, *, follow_symlinks=True):
+        st = real_stat(self, follow_symlinks=follow_symlinks)
+        if self == growing_file:
+            return SimpleNamespace(st_mode=st.st_mode, st_size=next(sizes))
+        return st
+    mocker.patch.object(Path, "stat", autospec=True, side_effect=fake_stat)
     mocker.patch("src.services.observer.time.sleep")
 
     assert handler._is_ready(growing_file, retries=2, delay=0.01) is False

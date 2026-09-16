@@ -175,19 +175,24 @@ def test_move_unicode_filename_no_collision(tmp_path, organizer):
 
 
 def test_move_case_different_name_is_distinct_on_posix(tmp_path, organizer):
-    skip_posix = os.name == "nt"
+    # Probe real FS case-sensitivity (macOS APFS is case-insensitive by default).
+    probe = tmp_path / "_case_probe.txt"
+    probe.write_text("a")
+    (tmp_path / "_CASE_PROBE.TXT").write_text("b")
+    case_sensitive = probe.read_text() == "a"
+
     src = tmp_path / "Readme.txt"
     src.write_text("lower")
     target = tmp_path / "Docs"
     target.mkdir()
-    (target / "README.txt").write_text("upper")      # only collides on NTFS
+    (target / "README.txt").write_text("upper")
 
     dest = organizer.move_file(src, target)
 
-    if skip_posix:
+    if not case_sensitive:
         assert dest == target / "Readme (1).txt"
     else:
-        assert dest == target / "Readme.txt"         # case-sensitive: distinct
+        assert dest == target / "Readme.txt"  # case-sensitive: distinct
 
 
 def test_move_symlink_source_moves_link_itself(tmp_path, organizer):
