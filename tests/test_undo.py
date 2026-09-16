@@ -12,6 +12,7 @@ Undo semantics under test:
 - every successful undo marks the entry 'reversed'
 - provenance queries answer "where did X go?" for any known path
 """
+import os
 import pytest
 from pathlib import Path
 
@@ -189,8 +190,10 @@ def test_undo_skips_when_dest_replaced_by_different_file(tmp_path, organizer):
     target.mkdir()
     dest = organizer.move_file(src, target)
 
-    dest.unlink()                       # different inode now
-    dest.write_text("replacement")
+    holder = tmp_path / "_holder.tmp"
+    holder.write_text("replacement")
+    dest.unlink()                       # replacement keeps a distinct inode
+    os.replace(holder, dest)
 
     undone = organizer.undo_last(1)
 

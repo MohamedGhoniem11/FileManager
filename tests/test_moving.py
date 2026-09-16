@@ -256,8 +256,11 @@ def test_undo_skips_when_dest_inode_changed(tmp_path, organizer):
     target = tmp_path / "Documents"
     target.mkdir()
     dest = organizer.move_file(src, target)
+
+    holder = tmp_path / "_holder.tmp"
+    holder.write_text("replacement")
     dest.unlink()
-    (target / "a.txt").write_text("replacement")     # different inode
+    os.replace(holder, dest)  # rename preserves holder's distinct inode
 
     assert organizer.undo_last() == 0
     assert (target / "a.txt").read_text() == "replacement"

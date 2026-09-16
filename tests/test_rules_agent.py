@@ -174,7 +174,7 @@ def test_generate_actions_move_to_priority(tmp_path):
     ]
     actions = generate_actions(matches, tmp_path)
     assert [a.rule_name for a in actions] == ["explicit", "category-only"]
-    assert actions[0].target == Path("/abs/target")  # move_to beats target_category
+    assert actions[0].target == Path("/abs/target").expanduser()  # move_to beats target_category
     assert actions[1].target == tmp_path / "OtherCat"
 
 
