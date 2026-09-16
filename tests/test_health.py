@@ -156,12 +156,12 @@ def test_execute_cleanup_stat_oserror_uses_zero(tmp_path, mocker):
 
     real_stat = Path.stat
     calls = {"dup": 0}
-    def fake_stat(self):
+    def fake_stat(self, *, follow_symlinks=True):
         if self == dup:
             calls["dup"] += 1
             if calls["dup"] > 1:  # sort succeeded once; execute-phase call fails
                 raise OSError("gone mid-move")
-        return real_stat(self)
+        return real_stat(self, follow_symlinks=follow_symlinks)
     mocker.patch.object(Path, "stat", autospec=True, side_effect=fake_stat)
 
     report = {"duplicates": {"h": [keeper, dup]}, "zero_byte_files": [],

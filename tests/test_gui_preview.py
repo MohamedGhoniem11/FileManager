@@ -21,6 +21,11 @@ def _action(**overrides):
     return ProposedAction(**defaults)
 
 
+def _expected_dst(target):
+    """Render a target path the same way the GUI does (native separators)."""
+    return str(target) if target else "(delete)"
+
+
 def test_confirmation_gated_delete_line():
     line = MaintenanceFrame._format_proposal(
         _action(kind="orphan_delete", target=None,
@@ -31,7 +36,7 @@ def test_confirmation_gated_delete_line():
 
 def test_undoable_move_line():
     line = MaintenanceFrame._format_proposal(_action())
-    assert line == "[UNDOABLE] deduplicate_move: dup.txt -> /tmp/Misc/dup.txt"
+    assert line == f"[UNDOABLE] deduplicate_move: dup.txt -> {_expected_dst(Path('/tmp/Misc/dup.txt'))}"
 
 
 def test_irreversible_overwrite_line():
