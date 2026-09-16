@@ -68,7 +68,7 @@ graph TD
         NLP
         Health
     end
-    subgraph Core "File Council (Steps 4-9)"
+    subgraph Core["File Council (Steps 4-9)"]
         CoreHub((Core))
         Analyzer
         Classifier
