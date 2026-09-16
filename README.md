@@ -2,8 +2,12 @@
 
 ![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)
+![Tests](https://img.shields.io/github/actions/workflow/status/MohamedGhoniem11/FileManager/tests.yml?label=CI&logo=github)
+![License](https://img.shields.io/github/license/MohamedGhoniem11/FileManager)
 
 > Full engineering documentation lives in [`docs/`](docs/README.md): honest audit with evidence, the old-vs-new transformation, the agentic architecture ("File Council"), and ADRs for every decision.
+>
+> Release history: [`CHANGELOG.md`](CHANGELOG.md) · [GitHub Releases](https://github.com/MohamedGhoniem11/FileManager/releases) · [Contributing](CONTRIBUTING.md)
 
 ---
 

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/MohamedGhoniem11/FileManager/blob/main/docs/README.md
+    about: Full engineering documentation, architecture, and ADRs
+  - name: Changelog
+    url: https://github.com/MohamedGhoniem11/FileManager/blob/main/CHANGELOG.md
+    about: Version history and release notes
+  - name: Releases
+    url: https://github.com/MohamedGhoniem11/FileManager/releases
+    about: Download packaged executables
