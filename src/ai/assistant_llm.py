@@ -14,18 +14,25 @@ from src.services.config_service import config_service
 from src.services.db_service import db_service
 from src.services.logger import logger
 
-TOOL_PROMPT = """You are a file manager assistant. Given the user's message, choose the best tool.
+TOOL_PROMPT = """You are a file manager assistant. Pick the BEST tool for the user's message.
+Reply with ONLY a JSON object — no explanation, no markdown.
 
-Available tools:
-- search: Find files by name, type, date, size, or content. Use when user asks about their files.
-- answer: Answer general questions about the file manager system.
-- config: Change settings (stop monitoring, change intervals, etc). Use when user says stop/set/change/enable/disable.
-- scan: Trigger a manual scan of a directory path.
-- status: Show system status/stats.
-- unknown: When you cannot determine the user's intent.
+Tools:
+- search: Find files by name, type, extension, date, or content keywords. ANY mention of files, docs, images, PDFs, photos → search.
+- status: Show how many files are indexed, system health, stats. ANY question about counts, indexed, status, how many → status.
+- scan: Trigger a file scan. ONLY when user says scan, check for new files, refresh, reindex.
+- config: Change settings. ONLY when user says stop/change/enable/disable a setting or behavior.
+- greeting: Say hello, introduce yourself, or say what you can do. Hi, hello, hey, help, what can you do, who are you.
+- unknown: Only when nothing else fits.
 
-Return ONLY a JSON object:
-{{"tool": "<tool_name>", "query": "<refined search query for search tool>", "params": {{}}}}
+Examples:
+User: "find my tax documents" → {{"tool": "search", "query": "tax documents", "params": {{}}}}
+User: "show me all PDFs from last week" → {{"tool": "search", "query": "PDFs last week", "params": {{}}}}
+User: "how many images do I have" → {{"tool": "status", "query": "images count", "params": {{}}}}
+User: "scan Downloads folder" → {{"tool": "scan", "query": "/home/dingo/Downloads", "params": {{}}}}
+User: "stop organizing zip files" → {{"tool": "config", "query": "stop organizing zip files", "params": {{}}}}
+User: "hello" → {{"tool": "greeting", "query": "hello", "params": {{}}}}
+User: "what can you do" → {{"tool": "greeting", "query": "capabilities", "params": {{}}}}
 
 User message: {message}
 

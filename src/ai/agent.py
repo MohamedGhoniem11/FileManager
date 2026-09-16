@@ -60,6 +60,8 @@ class Agent:
             return self._tool_scan(query)
         elif tool == "status":
             return self._tool_status()
+        elif tool == "greeting":
+            return self._tool_greeting()
         else:
             return self._deterministic_fallback(text)
 
@@ -138,6 +140,21 @@ class Agent:
         for cat, count in stats.get("categories", {}).items():
             resp += f"  {cat}: {count}\n"
         return {"intent": "debug_info", "entities": {}, "response": resp}
+
+    def _tool_greeting(self) -> Dict[str, Any]:
+        """Greeting / help response."""
+        stats = db_service.get_stats()
+        total = stats.get("total_files", 0)
+        resp = (
+            f"Hi! I'm your FileManager assistant. I can see {total} files in your library.\n\n"
+            "Try asking me to:\n"
+            "  \u2022 find images, PDFs, or any file type\n"
+            "  \u2022 show system status and stats\n"
+            "  \u2022 scan for new files\n"
+            "  \u2022 change settings (e.g. stop organizing zip files)\n\n"
+            "Just type naturally \u2014 I'll figure out what you mean."
+        )
+        return {"intent": "greeting", "entities": {}, "response": resp}
 
     def _deterministic_fallback(self, text: str) -> Dict[str, Any]:
         """Fallback to nlp_service when LLM is unavailable."""

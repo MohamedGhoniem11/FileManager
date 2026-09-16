@@ -310,6 +310,16 @@ class TestAgent:
         assert result["intent"] == "debug_info"
         assert result["response"] is None
 
+    def test_greeting_tool_returns_welcome(self, mocker, _llm_online):
+        mocker.patch(
+            "src.ai.agent.parse_intent",
+            return_value={"tool": "greeting", "query": "hello", "params": {}},
+        )
+        result = agent.process("hello")
+        assert result["intent"] == "greeting"
+        assert "FileManager assistant" in result["response"]
+        assert "find" in result["response"]
+
     def test_llm_unavailable_falls_back_silently(self, mocker):
         mocker.patch("src.ai.llm_client.is_available", return_value=False)
         result = agent.process("find pdfs")
