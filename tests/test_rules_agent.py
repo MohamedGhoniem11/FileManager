@@ -3,6 +3,7 @@ Rules Agent tests — declarative matching + dry-run contract (roadmap 6.2)
 ------------------------------------------------------------------------
 Hermetic: pure matcher over tmp_path files; no config/DB/IO side effects.
 """
+import os
 import time
 from pathlib import Path
 
@@ -174,7 +175,11 @@ def test_generate_actions_move_to_priority(tmp_path):
     ]
     actions = generate_actions(matches, tmp_path)
     assert [a.rule_name for a in actions] == ["explicit", "category-only"]
-    assert actions[0].target == Path("/abs/target").expanduser()  # move_to beats target_category
+    if os.name == "nt":
+        expected = Path(f"{tmp_path.drive}/abs/target")
+    else:
+        expected = Path("/abs/target")
+    assert actions[0].target == expected
     assert actions[1].target == tmp_path / "OtherCat"
 
 
