@@ -1,0 +1,100 @@
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset_name: FileManager-linux-x64
+          - os: windows-latest
+            asset_name: FileManager-windows-x64.exe
+          - os: macos-latest
+            asset_name: FileManager-macos-x64.zip
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Build with PyInstaller
+        run: pyinstaller --onefile --windowed --name "FileManager Pro" --paths . src/main.py
+
+      - name: Prepare release artifact
+        shell: bash
+        run: |
+          set -euxo pipefail
+          case "${{ runner.os }}" in
+            Windows)
+              mv "dist/FileManager Pro.exe" "dist/${{ matrix.asset_name }}"
+              ;;
+            Linux)
+              mv "dist/FileManager Pro" "dist/${{ matrix.asset_name }}"
+              ;;
+            macOS)
+              # --windowed on macOS produces dist/<name>.app (a directory) -> zip it
+              if [ -d "dist/FileManager Pro.app" ]; then
+                (cd dist && zip -qr "${{ matrix.asset_name }}" "FileManager Pro.app")
+              else
+                mv "dist/FileManager Pro" "dist/${{ matrix.asset_name }}"
+              fi
+              ;;
+          esac
+          ls -lh dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: dist/${{ matrix.asset_name }}
+          if-no-files-found: error
+
+  release:
+    name: Create draft release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Generate SHA256SUMS.txt
+        run: |
+          cd artifacts
+          find . -type f ! -name SHA256SUMS.txt -exec sha256sum {} \; \
+            | sed 's|  \./|  |' \
+            | sort -k2 > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create draft release with assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          draft: true
+          generate_release_notes: true
+          files: |
+            artifacts/SHA256SUMS.txt
+            artifacts/**/FileManager*
