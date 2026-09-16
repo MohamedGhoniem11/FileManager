@@ -1,6 +1,6 @@
 # 05 — Roadmap: Phased Implementation Plan
 
-> Testable milestones. Each step is one demonstrable idea — commit-sized, screen-recordable on its own.
+> Testable milestones. Each step is one demonstrable idea — commit-sized, self-contained.
 > This fixes the audit findings in dependency order (F-numbers link to [01-audit.md](01-audit.md)).
 
 ---

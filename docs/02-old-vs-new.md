@@ -75,7 +75,7 @@ Instead of one dumb mapping table, file handling becomes a **scored decision**:
 
 ---
 
-## 4. Side-by-Side (the interview slide)
+## 4. Side-by-Side
 
 | Dimension | OLD | NEW |
 |---|---|---|
@@ -93,9 +93,9 @@ Instead of one dumb mapping table, file handling becomes a **scored decision**:
 
 ---
 
-## 5. Where The War Room Patterns Live
+## 5. Where The Agentic Patterns Came From
 
-Every agentic muscle came from the hackathon project — that's the portfolio bridge:
+Every agentic muscle was prototyped in a multi-agent hackathon project, then mapped onto the file domain:
 
 | War Room pattern (The War Room) | Reused here as |
 |---|---|
@@ -117,7 +117,7 @@ Every agentic muscle came from the hackathon project — that's the portfolio br
 
 ---
 
-## 7. Before / After (for the screen recording)
+## 7. Before / After
 
 | Metric | Before | After |
 |---|---|---|

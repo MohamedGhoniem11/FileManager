@@ -9,14 +9,12 @@
 One journal (SQLite): every move/rename/delete with a timestamp and reason.
 - One click undoes the last N operations
 - Batched undo for "that last cleanup was a mistake"
-- **Interview moment:** move files, undo all of it live, show the journal rows
 
 ## B2. "Ask me when unsure" (HITL gate)
 
 Configurable confidence threshold, per category.
 - Above threshold → auto-move silently
 - Below → preview window: "Move `invoice_march.pdf` to **Tax**? (58% — low evidence)"
-- **Interview moment:** deliberately trigger low-confidence, show the gate
 
 ## B3. Smart Rules (visual + natural language)
 
@@ -30,7 +28,6 @@ Configurable confidence threshold, per category.
 
 Drag a file to the "wrong" place → the system learns the mapping + updates confidence.
 - Logs every correction; classifier priors evolve
-- **Interview moment:** misclassify on purpose, correct it, show that the next file with similar content lands correctly
 
 ## B5. Content Preview & Semantic Search
 
@@ -54,7 +51,7 @@ Drag a file to the "wrong" place → the system learns the mapping + updates con
 ## B8. Cross-Platform
 
 - Guard Windows-only imports, use `platformdirs` for config/log homes
-- Installable on Windows/Linux/macOS; the interview can run it on ANY machine
+- Installable on Windows/Linux/macOS
 
 ## B9. Health Audit 2.0
 

@@ -3,15 +3,7 @@
 ![Python](https://img.shields.io/badge/python-3.10+-yellow.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-blue.svg)
 
-> **The upgrade story lives in [`docs/`](docs/README.md)** — honest audit with evidence, the old-vs-new transformation, the agentic architecture ("File Council"), and a screen-recording demo script.
->
-> 1. [00 — Origin](docs/00-origin.md) · where this project came from
-> 2. [01 — Audit](docs/01-audit.md) · the truth about the old system (file:line evidence)
-> 3. [02 — Old vs New](docs/02-old-vs-new.md) · the transformation pitch
-> 4. [03 — Agentic Architecture](docs/03-agentic-architecture.md) · the File Council design
-> 5. [04 — Ease-of-Life Features](docs/04-ease-of-life.md) · what's added & why
-> 6. [05 — Roadmap](docs/05-roadmap.md) · phased, testable implementation plan
-> 7. [06 — Demo Script](docs/06-demo-script.md) · interview screen-recording guide
+> Full engineering documentation lives in [`docs/`](docs/README.md): honest audit with evidence, the old-vs-new transformation, the agentic architecture ("File Council"), and ADRs for every decision.
 
 ---
 
@@ -68,7 +60,7 @@ graph TD
         NLP
         Health
     end
-    subgraph Core["File Council (Steps 4-9)"]
+    subgraph Core["File Council"]
         CoreHub((Core))
         Analyzer
         Classifier
@@ -137,7 +129,7 @@ def _is_ready(self, file_path, retries=5, delay=0.2):
 
 **Problem**: Moving a file triggered a "File Modified" event, which triggered another move operation, creating an infinite recursion loop.
 
-**Solution**: The `DownloadHandler` processes `on_created` and `on_moved` events (the moves a watcher actually cares about), a file that fails the readiness check is skipped, and a file already sitting in its destination category folder is indexed and skipped rather than moved again — so no event chain can feed back into a second move. Since Step 6 the flow is gated: only `auto` decisions move; `ask`/`hold` decisions index the file in place and leave it for the user.
+**Solution**: The `DownloadHandler` processes `on_created` and `on_moved` events (the moves a watcher actually cares about), a file that fails the readiness check is skipped, and a file already sitting in its destination category folder is indexed and skipped rather than moved again — so no event chain can feed back into a second move. The flow is gated: only `auto` decisions move; `ask`/`hold` decisions index the file in place and leave it for the user.
 
 ```python
 def _process_file(self, file_path):
@@ -160,7 +152,7 @@ def _process_file(self, file_path):
 
 **Problem**: The cleanup command accidentally overwrote the entire `config.json` with a partial dictionary, destroying user settings.
 
-**Solution**: `config_service` never trusts a loaded file wholesale. `_validate_and_merge` merges the loaded JSON on top of `DEFAULT_CONFIG` with per-key type validation (wrong-typed keys fall back to defaults), and `save_config` is the only persisted write path. Since Step 2, the file carries a `schema_version` that `_apply_schema_migrations` upgrades in place ([F9](docs/01-audit.md)).
+**Solution**: `config_service` never trusts a loaded file wholesale. `_validate_and_merge` merges the loaded JSON on top of `DEFAULT_CONFIG` with per-key type validation (wrong-typed keys fall back to defaults), and `save_config` is the only persisted write path. The file carries a `schema_version` that `_apply_schema_migrations` upgrades in place ([F9](docs/01-audit.md)).
 
 ```python
 # src/services/config_service.py (simplified)

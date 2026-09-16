@@ -1,18 +1,18 @@
 # 03 — Agentic Architecture: The File Council
 
-> Grounded in The War Room's actual patterns (agents, weighted scoring, deliberation, human-in-the-loop, evidence trails) mapped onto the file domain. Decisions formalized in [ADR-010..015](decisions/).
+> Grounded in proven multi-agent patterns (agents, weighted scoring, deliberation, human-in-the-loop, evidence trails) mapped onto the file domain. Decisions formalized in [ADR-010..015](decisions/).
 
 ---
 
 ## 0. Design Goal
 
-Upgrade FileManager WITHOUT rewriting its working skeleton (services/core/gui layering survives). Add an **agentic judgment layer** where the old system had a lookup table — reusing War Room *patterns*, not reusing its frameworks.
+Upgrade FileManager WITHOUT rewriting its working skeleton (services/core/gui layering survives). Add an **agentic judgment layer** where the old system had a lookup table — reusing proven multi-agent *patterns*, not reusing their frameworks.
 
 ---
 
-## 1. The Agent Roster (War Room → File Domain)
+## 1. The Agent Roster
 
-| Agent | War Room origin | File-domain job | Inputs | Output |
+| Agent | Pattern origin | File-domain job | Inputs | Output |
 |---|---|---|---|---|
 | **Commander** | Incident Commander (orchestrates verdicts) | Orchestrates classification verdicts; owns confidence gates; writes journal | All agent outputs | Verdict: move / hold / ask-human |
 | **Analyzer** | Logs agent (evidence gathering) | Reads file internals: PDF text, image EXIF presence, code structure, archive manifest | file path + content | `ContentProfile` (typed dataclass) |
@@ -21,11 +21,11 @@ Upgrade FileManager WITHOUT rewriting its working skeleton (services/core/gui la
 | **Rules Agent** | Change agent (deploy correlation) | Evaluates user policies vs file facts; flags safe/risky | User policy set + ContentProfile | Matched policies + risk flags |
 | **Corrector** | Deliberation loop (AGREE/CHALLENGE) | Learns from user corrections; adjusts classifier priors | correction events | updated priors |
 
-**Frameworks note:** The War Room used multiple SDKs to prove interop. For a desktop tool, ONE lightweight decision layer (rules+statistics base) is the call — see [ADR-011](decisions/ADR-011-classification-engine-rules-plus-llm.md).
+**Frameworks note:** the source project used multiple SDKs to prove interop. For a desktop tool, ONE lightweight decision layer (rules+statistics base) is the call — see [ADR-011](decisions/ADR-011-classification-engine-rules-plus-llm.md).
 
 ---
 
-## 2. The Decision Protocol (the "why agents" answer)
+## 2. The Decision Protocol
 
 Old flow (deterministic, 1 op):
 ```
@@ -61,7 +61,7 @@ observer._process_file
 
 ---
 
-## 3. Confidence Scoring (port of War Room `scorer.py`)
+## 3. Confidence Scoring
 
 | Signal | Weight |
 |---|---|
@@ -115,7 +115,7 @@ The journal is a SQLite table, not an in-memory model: `op_type` (rename/copy_de
 
 - **Write-ahead design:** journal entry is committed BEFORE the move; the move is a "pending" entry finalized on success — [ADR-013](decisions/ADR-013-append-only-transaction-journal.md)
 - **Undo = replay journal in reverse** (file-level: `move:dest→src`; only journaled moves are undoable — deletes are not journaled)
-- **Provenance:** every path change queryable — "where did X go?" (the War Room evidence trail → postmortem pattern)
+- **Provenance:** every path change queryable — "where did X go?" (evidence trail → postmortem pattern)
 - SQLite **WAL mode + single-connection discipline** (fixes audit H2)
 
 ---

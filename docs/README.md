@@ -1,42 +1,27 @@
-# FileManager — Story Map (docs/)
+# FileManager — Engineering Documentation
 
-> This folder is the **interview artifact**. It tells one story: how a working-but-broken file organiser was audited honestly, understood deeply, and upgraded with agentic AI patterns — the same patterns proven in a multi-agent hackathon project.
-
-## The Three-Act Arc
-
-```
-ACT 1: The Origin    Download Organizer (idea doc) → FileManager Pro (this repo)
-ACT 2: The Discovery War Room hackathon → agentic AI skills (5 agents, Band SDK, confidence scoring, human-in-the-loop)
-ACT 3: The Upgrade   FileManager + agent patterns = "Agentic FileManager" (File Council architecture)
-```
+> How this project got to where it is: the honest audit of the original system, the
+> transformation, the agentic architecture, and the decisions behind every change.
 
 ## The Docs
 
-| Doc | What it is | Read it to see |
-|---|---|---|
-| [00-origin.md](00-origin.md) | Where this project came from | The honest origin story: idea → tool → hackathon |
-| [01-audit.md](01-audit.md) | Old System Audit (the truth) | Real bugs with file:line evidence, verified two ways |
-| [02-old-vs-new.md](02-old-vs-new.md) | The Transformation Pitch | Why the old way was limited, what the new way does |
-| [03-agentic-architecture.md](03-agentic-architecture.md) | File Council design | How War Room agent patterns map onto file management |
-| [04-ease-of-life.md](04-ease-of-life.md) | Feature list | What's added and why it matters to a real user |
-| [05-roadmap.md](05-roadmap.md) | Phased implementation plan | Testable milestones, one demonstrable idea per commit |
-| [06-demo-script.md](06-demo-script.md) | Screen recording guide | The ~20 min interview demo, engineered shot-by-shot |
-| [07-ai-integration.md](07-ai-integration.md) | Local LLM + Agentic RAG design | How qwen3:0.6b + nomic-embed-text turn the Assistant into a grounded co-pilot |
-| [decisions/](decisions/) | ADR-001..017 | The engineering decisions, none made by vibes |
-
-## Two Repos, One Story
-
-- [`MohamedGhoniem11/FileManager`](https://github.com/MohamedGhoniem11/FileManager) — this repo, the upgrade target
-- `The War Room` (hackathon, archived in vault) — where the agent patterns came from
-
-The git history of this repo is part of the story: `docs(audit)` → `docs(architecture)` → implementation. Each commit is one demonstrable idea.
+| Doc | What it is |
+|---|---|
+| [00-origin.md](00-origin.md) | Project history: idea → tool → agentic upgrade |
+| [01-audit.md](01-audit.md) | Audit of the old system — real bugs with file:line evidence |
+| [02-old-vs-new.md](02-old-vs-new.md) | The transformation: what changed and why |
+| [03-agentic-architecture.md](03-agentic-architecture.md) | The "File Council" design — agents, scoring, gates |
+| [04-ease-of-life.md](04-ease-of-life.md) | User-facing features and the pain they solve |
+| [05-roadmap.md](05-roadmap.md) | Phased implementation plan with verification per step |
+| [07-ai-integration.md](07-ai-integration.md) | Local LLM + Agentic RAG design (qwen3 + nomic-embed-text) |
+| [decisions/](decisions/) | ADR-001..017 — the engineering decisions, evidence-first |
 
 ---
 
-## Reading order for an interview setting
+## Suggested reading order
 
-1. `01-audit.md` — establish that the criticism is evidence-based, not taste-based
-2. `02-old-vs-new.md` — the emotional arc ("this thing did X badly, now it does Y")
-3. `03-agentic-architecture.md` — the thinking (this is the "are you actually good" test)
+1. `01-audit.md` — the criticism is evidence-based, not taste-based
+2. `02-old-vs-new.md` — the transformation arc
+3. `03-agentic-architecture.md` — how the design actually works
 4. `04-ease-of-life.md` + `05-roadmap.md` — the product sense + the plan
-5. `06-demo-script.md` — the proof you can communicate it
+5. `07-ai-integration.md` — the current assistant design
